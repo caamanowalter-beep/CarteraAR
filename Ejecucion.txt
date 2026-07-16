@@ -1,0 +1,173 @@
+Windows PowerShell
+Copyright (C) Microsoft Corporation. Todos los derechos reservados.
+
+Instale la versión más reciente de PowerShell para obtener nuevas características y mejoras. https://aka.ms/PSWindows
+
+(.venv) PS C:\Users\User\Desktop\Carteras PY> cd "C:\Users\User\Desktop\Carteras PY\scripts"
+(.venv) PS C:\Users\User\Desktop\Carteras PY\scripts> python -m streamlit run app.py
+C:\Users\User\Desktop\Carteras PY\.venv\Scripts\python.exe: No module named streamlit
+(.venv) PS C:\Users\User\Desktop\Carteras PY\scripts> cd "C:\Users\User\Desktop\Carteras PY"
+(.venv) PS C:\Users\User\Desktop\Carteras PY> .venv\Scripts\activate
+(.venv) PS C:\Users\User\Desktop\Carteras PY> pip install streamlit plotly yfinance pandas numpy scipy openpyxl requests pdfplumber python-dateutil deep-translator psycopg2-binary
+Fatal error in launcher: Unable to create process using '"C:\Users\User\Desktop\Carteras\.venv\Scripts\python.exe"  "C:\Users\User\Desktop\Carteras PY\.venv\Scripts\pip.exe" install streamlit plotly yfinance pandas numpy scipy openpyxl requests pdfplumber python-dateutil deep-translator psycopg2-binary': El sistema no puede encontrar el archivo especificado.
+
+(.venv) PS C:\Users\User\Desktop\Carteras PY> pip install --user streamlit plotly yfinance pandas numpy scipy openpyxl requests pdfplumber python-dateutil deep-translator psycopg2-binary
+Fatal error in launcher: Unable to create process using '"C:\Users\User\Desktop\Carteras\.venv\Scripts\python.exe"  "C:\Users\User\Desktop\Carteras PY\.venv\Scripts\pip.exe" install --user streamlit plotly yfinance pandas numpy scipy openpyxl requests pdfplumber python-dateutil deep-translator psycopg2-binary': El sistema no puede encontrar el archivo especificado.
+
+(.venv) PS C:\Users\User\Desktop\Carteras PY> pip install streamlit plotly yfinance pandas numpy scipy openpyxl requests pdfplumber python-dateutil deep-translator psycopg2-binary
+Fatal error in launcher: Unable to create process using '"C:\Users\User\Desktop\Carteras\.venv\Scripts\python.exe"  "C:\Users\User\Desktop\Carteras PY\.venv\Scripts\pip.exe" install streamlit plotly yfinance pandas numpy scipy openpyxl requests pdfplumber python-dateutil deep-translator psycopg2-binary': El sistema no puede encontrar el archivo especificado.
+
+(.venv) PS C:\Users\User\Desktop\Carteras PY> cd "C:\Users\User\Desktop\Carteras PY"
+(.venv) PS C:\Users\User\Desktop\Carteras PY> pip install -r requirements.txt
+Fatal error in launcher: Unable to create process using '"C:\Users\User\Desktop\Carteras\.venv\Scripts\python.exe"  "C:\Users\User\Desktop\Carteras PY\.venv\Scripts\pip.exe" install -r requirements.txt': El sistema no puede encontrar el archivo especificado.
+
+(.venv) PS C:\Users\User\Desktop\Carteras PY> cd "C:\Users\User\Desktop\Carteras PY"
+(.venv) PS C:\Users\User\Desktop\Carteras PY> .venv\Scripts\activate
+(.venv) PS C:\Users\User\Desktop\Carteras PY> pip install streamlit plotly yfinance pandas numpy scipy openpyxl requests pdfplumber python-dateutil deep-translator psycopg2-binary
+Fatal error in launcher: Unable to create process using '"C:\Users\User\Desktop\Carteras\.venv\Scripts\python.exe"  "C:\Users\User\Desktop\Carteras PY\.venv\Scripts\pip.exe" install streamlit plotly yfinance pandas numpy scipy openpyxl requests pdfplumber python-dateutil deep-translator psycopg2-binary': El sistema no puede encontrar el archivo especificado.
+
+(.venv) PS C:\Users\User\Desktop\Carteras PY> C:\Users\User\AppData\Local\Programs\Python\Python312\python.exe -m streamlit run app.py
+C:\Users\User\AppData\Local\Programs\Python\Python312\python.exe : El término 'C:\Users\User\AppData\Local\Programs\Python\Python312\python.exe' no se reconoce como nombre de un 
+cmdlet, función, archivo de script o programa ejecutable. Compruebe si escribió correctamente el nombre o, si incluyó una ruta de acceso, compruebe que dicha ruta es correcta e 
+inténtelo de nuevo.
+En línea: 1 Carácter: 1
++ C:\Users\User\AppData\Local\Programs\Python\Python312\python.exe -m s ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (C:\Users\User\A...n312\python.exe:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+(.venv) PS C:\Users\User\Desktop\Carteras PY> where python
+(.venv) PS C:\Users\User\Desktop\Carteras PY> py --version
+Python 3.10.2
+(.venv) PS C:\Users\User\Desktop\Carteras PY> py -m pip install streamlit plotly yfinance pandas numpy scipy openpyxl requests pdfplumber python-dateutil deep-translator psycopg2-binary
+Collecting streamlit
+  Downloading streamlit-1.59.2-py3-none-any.whl (10.3 MB)
+     |████████████████████████████████| 10.3 MB 2.2 MB/s                                                                                                                            
+Collecting plotly
+  Downloading plotly-6.9.0-py3-none-any.whl (9.9 MB)
+     |████████████████████████████████| 9.9 MB 6.8 MB/s                                                                                                                             
+Requirement already satisfied: yfinance in c:\users\user\desktop\carteras py\.venv\lib\site-packages (0.2.66)
+Requirement already satisfied: pandas in c:\users\user\desktop\carteras py\.venv\lib\site-packages (2.3.3)
+Requirement already satisfied: numpy in c:\users\user\desktop\carteras py\.venv\lib\site-packages (2.2.6)
+Requirement already satisfied: scipy in c:\users\user\desktop\carteras py\.venv\lib\site-packages (1.15.3)
+Requirement already satisfied: openpyxl in c:\users\user\desktop\carteras py\.venv\lib\site-packages (3.1.5)
+Requirement already satisfied: requests in c:\users\user\desktop\carteras py\.venv\lib\site-packages (2.32.5)
+Requirement already satisfied: pdfplumber in c:\users\user\desktop\carteras py\.venv\lib\site-packages (0.11.7)
+Requirement already satisfied: python-dateutil in c:\users\user\desktop\carteras py\.venv\lib\site-packages (2.9.0.post0)
+Collecting deep-translator
+  Downloading deep_translator-1.11.4-py3-none-any.whl (42 kB)
+     |████████████████████████████████| 42 kB 414 kB/s                                                                                                                              
+Collecting psycopg2-binary
+  Downloading psycopg2_binary-2.9.12-cp310-cp310-win_amd64.whl (2.8 MB)
+     |████████████████████████████████| 2.8 MB ...                                                                                                                                  
+Collecting watchdog<7,>=2.1.5
+  Downloading watchdog-6.0.0-py3-none-win_amd64.whl (79 kB)
+     |████████████████████████████████| 79 kB 3.7 MB/s                                                                                                                              
+Collecting pyarrow<25,>=7.0
+  Downloading pyarrow-24.0.0-cp310-cp310-win_amd64.whl (27.3 MB)
+     |████████████████████████████████| 27.3 MB 6.4 MB/s                                                                                                                            
+Collecting gitpython!=3.1.19,<4,>=3.0.7
+  Downloading gitpython-3.1.51-py3-none-any.whl (215 kB)
+     |████████████████████████████████| 215 kB ...                                                                                                                                  
+Requirement already satisfied: click<9,>=7.0 in c:\users\user\desktop\carteras py\.venv\lib\site-packages (from streamlit) (8.3.0)
+Requirement already satisfied: packaging>=20 in c:\users\user\desktop\carteras py\.venv\lib\site-packages (from streamlit) (25.0)
+Requirement already satisfied: pillow<13,>=7.1.0 in c:\users\user\desktop\carteras py\.venv\lib\site-packages (from streamlit) (12.0.0)
+Collecting itsdangerous>=2.1.2
+  Downloading itsdangerous-2.2.0-py3-none-any.whl (16 kB)
+Collecting pydeck<1,>=0.8.0b4
+  Downloading pydeck-0.9.3-py2.py3-none-any.whl (11.4 MB)
+     |████████████████████████████████| 11.4 MB 6.8 MB/s                                                                                                                            
+Collecting httptools>=0.6.3
+  Downloading httptools-0.8.0-cp310-cp310-win_amd64.whl (90 kB)
+     |████████████████████████████████| 90 kB 2.7 MB/s                                                                                                                              
+Collecting starlette>=0.40.0
+  Downloading starlette-1.3.1-py3-none-any.whl (73 kB)
+     |████████████████████████████████| 73 kB 975 kB/s                                                                                                                              
+Collecting blinker<2,>=1.5.0
+  Downloading blinker-1.9.0-py3-none-any.whl (8.5 kB)
+Requirement already satisfied: websockets>=12.0.0 in c:\users\user\desktop\carteras py\.venv\lib\site-packages (from streamlit) (15.0.1)
+Collecting python-multipart>=0.0.10
+  Downloading python_multipart-0.0.32-py3-none-any.whl (30 kB)
+Collecting altair!=5.4.0,!=5.4.1,<7,>=4.0
+  Downloading altair-6.2.2-py3-none-any.whl (797 kB)
+     |████████████████████████████████| 797 kB ...                                                                                                                                  
+Collecting tenacity<10,>=8.1.0
+  Downloading tenacity-9.1.4-py3-none-any.whl (28 kB)
+Collecting toml<2,>=0.10.1
+  Downloading toml-0.10.2-py2.py3-none-any.whl (16 kB)
+Collecting anyio>=4.0.0
+  Downloading anyio-4.14.2-py3-none-any.whl (125 kB)
+     |████████████████████████████████| 125 kB 6.8 MB/s                                                                                                                             
+Requirement already satisfied: typing-extensions<5,>=4.10.0 in c:\users\user\desktop\carteras py\.venv\lib\site-packages (from streamlit) (4.15.0)
+Collecting uvicorn>=0.30.0
+  Downloading uvicorn-0.51.0-py3-none-any.whl (73 kB)
+     |████████████████████████████████| 73 kB 820 kB/s                                                                                                                              
+Collecting cachetools<8,>=5.5
+  Downloading cachetools-7.1.4-py3-none-any.whl (16 kB)
+Requirement already satisfied: protobuf<8,>=3.20 in c:\users\user\desktop\carteras py\.venv\lib\site-packages (from streamlit) (6.33.0)
+Collecting narwhals>=1.15.1
+  Downloading narwhals-2.24.0-py3-none-any.whl (461 kB)
+     |████████████████████████████████| 461 kB 6.4 MB/s                                                                                                                             
+Requirement already satisfied: pytz>=2022.5 in c:\users\user\desktop\carteras py\.venv\lib\site-packages (from yfinance) (2025.2)
+Requirement already satisfied: peewee>=3.16.2 in c:\users\user\desktop\carteras py\.venv\lib\site-packages (from yfinance) (3.18.3)
+Requirement already satisfied: curl_cffi>=0.7 in c:\users\user\desktop\carteras py\.venv\lib\site-packages (from yfinance) (0.13.0)
+Requirement already satisfied: multitasking>=0.0.7 in c:\users\user\desktop\carteras py\.venv\lib\site-packages (from yfinance) (0.0.12)
+Requirement already satisfied: beautifulsoup4>=4.11.1 in c:\users\user\desktop\carteras py\.venv\lib\site-packages (from yfinance) (4.14.2)
+Requirement already satisfied: platformdirs>=2.0.0 in c:\users\user\desktop\carteras py\.venv\lib\site-packages (from yfinance) (4.5.0)
+Requirement already satisfied: frozendict>=2.3.4 in c:\users\user\desktop\carteras py\.venv\lib\site-packages (from yfinance) (2.4.6)
+Requirement already satisfied: tzdata>=2022.7 in c:\users\user\desktop\carteras py\.venv\lib\site-packages (from pandas) (2025.2)
+Requirement already satisfied: et-xmlfile in c:\users\user\desktop\carteras py\.venv\lib\site-packages (from openpyxl) (2.0.0)
+Requirement already satisfied: charset_normalizer<4,>=2 in c:\users\user\desktop\carteras py\.venv\lib\site-packages (from requests) (3.4.4)
+Requirement already satisfied: idna<4,>=2.5 in c:\users\user\desktop\carteras py\.venv\lib\site-packages (from requests) (3.11)
+Requirement already satisfied: urllib3<3,>=1.21.1 in c:\users\user\desktop\carteras py\.venv\lib\site-packages (from requests) (2.5.0)
+Requirement already satisfied: certifi>=2017.4.17 in c:\users\user\desktop\carteras py\.venv\lib\site-packages (from requests) (2025.10.5)
+Requirement already satisfied: pypdfium2>=4.18.0 in c:\users\user\desktop\carteras py\.venv\lib\site-packages (from pdfplumber) (5.0.0)
+Requirement already satisfied: pdfminer.six==20250506 in c:\users\user\desktop\carteras py\.venv\lib\site-packages (from pdfplumber) (20250506)
+Requirement already satisfied: cryptography>=36.0.0 in c:\users\user\desktop\carteras py\.venv\lib\site-packages (from pdfminer.six==20250506->pdfplumber) (46.0.3)
+Requirement already satisfied: six>=1.5 in c:\users\user\desktop\carteras py\.venv\lib\site-packages (from python-dateutil) (1.17.0)
+Collecting jinja2
+  Downloading jinja2-3.1.6-py3-none-any.whl (134 kB)
+     |████████████████████████████████| 134 kB ...                                                                                                                                  
+Collecting jsonschema>=3.0
+  Downloading jsonschema-4.26.0-py3-none-any.whl (90 kB)
+     |████████████████████████████████| 90 kB 5.8 MB/s                                                                                                                              
+Collecting exceptiongroup>=1.0.2
+  Downloading exceptiongroup-1.3.1-py3-none-any.whl (16 kB)
+Requirement already satisfied: soupsieve>1.2 in c:\users\user\desktop\carteras py\.venv\lib\site-packages (from beautifulsoup4>=4.11.1->yfinance) (2.8)
+Requirement already satisfied: colorama in c:\users\user\desktop\carteras py\.venv\lib\site-packages (from click<9,>=7.0->streamlit) (0.4.6)
+Requirement already satisfied: cffi>=2.0.0 in c:\users\user\desktop\carteras py\.venv\lib\site-packages (from cryptography>=36.0.0->pdfminer.six==20250506->pdfplumber) (2.0.0)
+Requirement already satisfied: pycparser in c:\users\user\desktop\carteras py\.venv\lib\site-packages (from cffi>=2.0.0->cryptography>=36.0.0->pdfminer.six==20250506->pdfplumber) (2.23)
+Collecting gitdb<5,>=4.0.1
+  Downloading gitdb-4.0.12-py3-none-any.whl (62 kB)
+     |████████████████████████████████| 62 kB 592 kB/s                                                                                                                              
+Collecting smmap<6,>=3.0.1
+  Downloading smmap-5.0.3-py3-none-any.whl (24 kB)
+Collecting attrs>=22.2.0
+  Downloading attrs-26.1.0-py3-none-any.whl (67 kB)
+     |████████████████████████████████| 67 kB 2.7 MB/s                                                                                                                              
+Collecting jsonschema-specifications>=2023.03.6
+  Downloading jsonschema_specifications-2025.9.1-py3-none-any.whl (18 kB)
+Collecting referencing>=0.28.4
+  Downloading referencing-0.37.0-py3-none-any.whl (26 kB)
+Collecting rpds-py>=0.25.0
+  Downloading rpds_py-0.30.0-cp310-cp310-win_amd64.whl (235 kB)
+     |████████████████████████████████| 235 kB ...                                                                                                                                  
+Collecting MarkupSafe>=2.0
+  Downloading markupsafe-3.0.3-cp310-cp310-win_amd64.whl (15 kB)
+Collecting h11>=0.8
+  Downloading h11-0.16.0-py3-none-any.whl (37 kB)
+Installing collected packages: rpds-py, attrs, referencing, smmap, MarkupSafe, jsonschema-specifications, exceptiongroup, narwhals, jsonschema, jinja2, h11, gitdb, anyio, watchdog, uvicorn, toml, tenacity, starlette, python-multipart, pydeck, pyarrow, itsdangerous, httptools, gitpython, cachetools, blinker, altair, streamlit, psycopg2-binary, plotly, deep-translator
+Successfully installed MarkupSafe-3.0.3 altair-6.2.2 anyio-4.14.2 attrs-26.1.0 blinker-1.9.0 cachetools-7.1.4 deep-translator-1.11.4 exceptiongroup-1.3.1 gitdb-4.0.12 gitpython-3.1.51 h11-0.16.0 httptools-0.8.0 itsdangerous-2.2.0 jinja2-3.1.6 jsonschema-4.26.0 jsonschema-specifications-2025.9.1 narwhals-2.24.0 plotly-6.9.0 psycopg2-binary-2.9.12 pyarrow-24.0.0 pydeck-0.9.3 python-multipart-0.0.32 referencing-0.37.0 rpds-py-0.30.0 smmap-5.0.3 starlette-1.3.1 streamlit-1.59.2 tenacity-9.1.4 toml-0.10.2 uvicorn-0.51.0 watchdog-6.0.0
+WARNING: You are using pip version 21.2.4; however, version 26.1.2 is available.
+You should consider upgrading via the 'C:\Users\User\Desktop\Carteras PY\.venv\Scripts\python.exe -m pip install --upgrade pip' command.                                            
+(.venv) PS C:\Users\User\Desktop\Carteras PY> cd "C:\Users\User\Desktop\Carteras PY\scripts"
+(.venv) PS C:\Users\User\Desktop\Carteras PY\scripts> py -m streamlit run app.py
+2026-07-15 21:14:48.896 Uvicorn server started on :::8501
+
+  You can now view your Streamlit app in your browser.
+
+  Local URL: http://localhost:8501
+  Network URL: http://192.168.1.4:8501
+
+  Help agents write better Streamlit apps?
+  Install the official Streamlit skills by running streamlit skills in your terminal.

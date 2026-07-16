@@ -1,0 +1,26 @@
+{
+  "fecha": "2026-07-15T21:14:55.659289",
+  "equivalencias": {
+    "BMA": "BMA",
+    "GGAL": "GGAL",
+    "BBAR": "BBAR",
+    "SUPV": "SUPV",
+    "BYMA": null,
+    "YPFD": "YPF",
+    "PAMP": "PAM",
+    "CEPU": "CEPU",
+    "TGSU2": "TGS",
+    "TGNO4": null,
+    "COME": null,
+    "TECO2": "TEO",
+    "ALUA": null,
+    "TXAR": null,
+    "IRSA": "IRS",
+    "CRES": null,
+    "AGRO": null,
+    "EDN": "EDN",
+    "LOMA": null,
+    "MIRG": null,
+    "HARG": null
+  }
+}

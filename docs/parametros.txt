@@ -1,0 +1,24 @@
+# Parámetros definidos en el análisis
+
+TICKERS_DEFAULT:
+AAPL, MSFT, NVDA, KO, MCD, TSLA, INTC, AMD, AMZN, ARKK,
+DISN, DOW, GOOGL, MELI, META, PBR, QQQ, SPY, RIO, SNOW, V, VIST, XLF, XLP
+
+AÑOS_ANALISIS: 5
+INTERVALO_DATOS: 1mo
+FECHA_INICIO: hoy - 5 años
+FECHA_FIN: hoy
+
+MARGEN_NETO_MIN: 0.20
+ROIC_MIN: 0.15
+DEUDA_MAX: 0.5
+
+FUENTES_CCL:
+- DolarApi.com
+- ArgentinaDatos
+- DolarHoy
+
+ARCHIVOS:
+- PDF CEDEAR: data/BYMA-Tabla-CEDEARs.pdf
+- CSV CEDEAR: data/ratios_cedear.csv
+- Resultados: data/resultados/*.xlsx

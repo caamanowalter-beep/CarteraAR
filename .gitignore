@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+
+# Datos locales (NO subir a GitHub)
+data/cartera.db
+data/resultados/
+data/cedear_equivalencias.json
+
+# Archivos de PyCharm
+.idea/
+*.iml
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# Streamlit cache local
+.streamlit/secrets.toml
