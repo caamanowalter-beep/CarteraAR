@@ -1,3 +1,4 @@
+__version__ = "2.0.202607161116"
 """
 cedear_mapper.py — compartido entre Historico.py y la app Streamlit
 """
