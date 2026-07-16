@@ -154,6 +154,81 @@ def _tab_gestionar_carteras():
                 st.error("Ingresá un nombre para la cartera.")
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# TAB: AGREGAR POSICIÓN
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _tab_agregar_posicion(cartera_id: int, nombre: str):
+    st.markdown(f"### ➕ Agregar posición a **{nombre}**")
+    st.info(
+        "**¿Es un CEDEAR?** Si compraste el activo en Argentina (BYMA), "
+        "marcá la opción 'Es CEDEAR 🇦🇷'. El precio promedio debe ser en **ARS** "
+        "(lo que pagaste en el mercado local). El sistema usará el precio del CEDEAR "
+        "en BYMA para calcular tu P&L correctamente, sin distorsión por el tipo de cambio."
+    )
+
+    with st.form("form_posicion", clear_on_submit=True):
+        c1, c2, c3 = st.columns(3)
+        ticker    = c1.text_input("Ticker", placeholder="ej: AAPL o MELI").upper().strip()
+        cantidad  = c2.number_input("Cantidad", min_value=0.0001, value=1.0, step=0.01)
+        es_cedear = c3.checkbox(
+            "Es CEDEAR 🇦🇷",
+            help="Marcá si compraste este activo como CEDEAR en Argentina (BYMA). "
+                 "El precio promedio debe estar en ARS."
+        )
+        c4, c5, c6 = st.columns(3)
+        if es_cedear:
+            precio = c4.number_input(
+                "Precio promedio (ARS)",
+                min_value=0.01, value=1000.0, step=1.0,
+                help="Precio promedio de compra del CEDEAR en pesos argentinos"
+            )
+            moneda = "ARS"
+            c5.info("💱 Moneda: **ARS** (automático para CEDEARs)")
+        else:
+            precio = c4.number_input(
+                "Precio promedio (USD)",
+                min_value=0.0001, value=100.0, step=0.01,
+                help="Precio promedio de compra en dólares"
+            )
+            moneda = c5.selectbox("Moneda", ["USD", "ARS"])
+        fecha_ref = c6.date_input("Fecha de referencia", value=date.today())
+        notas     = st.text_input("Notas (opcional)",
+                                  placeholder="ej: Posición acumulada 2022-2024")
+
+        if st.form_submit_button("✅ Agregar / Actualizar posición",
+                                  type="primary", use_container_width=True):
+            if not ticker:
+                st.error("❌ Ingresá un ticker válido.")
+            else:
+                cartera_db.agregar_posicion(
+                    cartera_id, ticker, cantidad, precio,
+                    moneda, str(fecha_ref), notas, es_cedear
+                )
+                tipo_str   = "CEDEAR 🇦🇷" if es_cedear else "Internacional 🌎"
+                moneda_str = "ARS" if es_cedear else moneda
+                st.success(
+                    f"✅ {cantidad} × {ticker} ({tipo_str}) @ "
+                    f"${precio:,.2f} {moneda_str} agregado a {nombre}"
+                )
+                st.rerun()
+
+    # Eliminar posición
+    df_pos = cartera_db.listar_posiciones(cartera_id)
+    if not df_pos.empty:
+        st.markdown("---")
+        st.markdown("#### 🗑️ Eliminar posición")
+        ticker_del = st.selectbox(
+            "Seleccioná el ticker a eliminar",
+            df_pos["ticker"].tolist(),
+            key="del_pos_sel"
+        )
+        if st.button(f"🗑️ Eliminar {ticker_del} de {nombre}", type="secondary"):
+            cartera_db.eliminar_posicion(cartera_id, ticker_del)
+            st.warning(f"🗑️ {ticker_del} eliminado de {nombre}")
+            st.rerun()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # TAB: RESUMEN P&L
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -195,7 +270,7 @@ def _tab_resumen(cartera_id: int, nombre: str, ccl: float):
 
     st.dataframe(
         df_pnl[cols_ok].style
-            .applymap(_color_ganancia, subset=["Ganancia (USD)", "Ganancia (%)"])
+            .map(_color_ganancia, subset=["Ganancia (USD)", "Ganancia (%)"])
             .format({
                 "Precio promedio":     "${:,.2f}",
                 "Precio actual (USD)": lambda v: f"${v:,.2f}" if v else "—",
@@ -236,7 +311,7 @@ def _tab_resumen(cartera_id: int, nombre: str, ccl: float):
                 df_gr[["ticker","fecha_venta","cantidad_vendida",
                         "precio_compra_prom","precio_venta",
                         "ganancia_usd","ganancia_pct"]].style
-                    .applymap(_color_ganancia, subset=["ganancia_usd","ganancia_pct"])
+                    .map(_color_ganancia, subset=["ganancia_usd","ganancia_pct"])
                     .format({
                         "precio_compra_prom": "${:,.2f}",
                         "precio_venta":       "${:,.2f}",
@@ -267,37 +342,7 @@ def _tab_resumen(cartera_id: int, nombre: str, ccl: float):
 # TAB: AGREGAR POSICIÓN
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def _tab_agregar_posicion(cartera_id: int, nombre: str):
-    st.markdown(f"### ➕ Agregar posición a **{nombre}**")
-    st.info(
-        "Usá este formulario para cargar el **estado actual** de una posición. "
-        "Ingresá el precio promedio de compra (sin necesidad de reconstruir el historial completo)."
-    )
 
-    with st.form("form_posicion", clear_on_submit=True):
-        c1, c2 = st.columns(2)
-        ticker        = c1.text_input("Ticker", placeholder="ej: AAPL").upper().strip()
-        cantidad      = c2.number_input("Cantidad de acciones", min_value=0.0001,
-                                        value=1.0, step=0.01)
-        c3, c4, c5 = st.columns(3)
-        precio        = c3.number_input("Precio promedio de compra",
-                                        min_value=0.0001, value=100.0, step=0.01)
-        moneda        = c4.selectbox("Moneda", ["USD", "ARS"])
-        fecha_ref     = c5.date_input("Fecha de referencia", value=date.today())
-        notas         = st.text_input("Notas (opcional)",
-                                      placeholder="ej: Posición acumulada 2022-2024")
-
-        if st.form_submit_button("✅ Agregar / Actualizar posición",
-                                  type="primary", use_container_width=True):
-            if not ticker:
-                st.error("❌ Ingresá un ticker válido.")
-            else:
-                cartera_db.agregar_posicion(
-                    cartera_id, ticker, cantidad, precio,
-                    moneda, str(fecha_ref), notas
-                )
-                st.success(f"✅ {cantidad} × {ticker} @ {precio} {moneda} agregado a {nombre}")
-                st.rerun()
 
     # Eliminar posición
     df_pos = cartera_db.listar_posiciones(cartera_id)
@@ -369,7 +414,7 @@ def _tab_movimientos(cartera_id: int, nombre: str):
         st.dataframe(
             df_mov[["fecha","tipo","ticker","cantidad","precio",
                     "moneda","comision","notas"]].style
-                .applymap(color_tipo, subset=["tipo"])
+                .map(color_tipo, subset=["tipo"])
                 .format({
                     "precio":   "${:,.2f}",
                     "comision": "${:,.2f}",
@@ -492,7 +537,7 @@ def _tab_comparar(ccl: float):
     # Tabla comparativa
     st.dataframe(
         df_comp.style
-            .applymap(_color_ganancia,
+            .map(_color_ganancia,
                       subset=["Ganancia no realiz.", "Ganancia %", "Ganancia realizada"])
             .format({
                 "Costo total (USD)":   "${:,.2f}",
