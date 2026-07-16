@@ -159,44 +159,79 @@ def _tab_gestionar_carteras():
 
 def _tab_agregar_posicion(cartera_id: int, nombre: str):
     st.markdown(f"### ➕ Agregar posición a **{nombre}**")
-    st.info(
-        "**¿Es un CEDEAR?** Si compraste el activo en Argentina (BYMA), "
-        "marcá la opción 'Es CEDEAR 🇦🇷'. El precio promedio debe ser en **ARS** "
-        "(lo que pagaste en el mercado local). El sistema usará el precio del CEDEAR "
-        "en BYMA para calcular tu P&L correctamente, sin distorsión por el tipo de cambio."
-    )
 
-    with st.form("form_posicion", clear_on_submit=True):
-        c1, c2, c3 = st.columns(3)
-        ticker    = c1.text_input("Ticker", placeholder="ej: AAPL o MELI").upper().strip()
-        cantidad  = c2.number_input("Cantidad", min_value=0.0001, value=1.0, step=0.01)
-        es_cedear = c3.checkbox(
-            "Es CEDEAR 🇦🇷",
-            help="Marcá si compraste este activo como CEDEAR en Argentina (BYMA). "
-                 "El precio promedio debe estar en ARS."
+    # Selector de tipo FUERA del form para actualización inmediata
+    # Evita el bug donde el primer ticker ignora el tipo seleccionado
+    key_cedear = f"es_cedear_toggle_{cartera_id}"
+    if key_cedear not in st.session_state:
+        st.session_state[key_cedear] = False
+
+    st.markdown("**Tipo de activo:**")
+    col_t1, col_t2 = st.columns(2)
+    with col_t1:
+        if st.button(
+            "✅ Internacional / USD 🌎" if not st.session_state[key_cedear] else "🌎 Internacional / USD",
+            key=f"btn_intl_{cartera_id}",
+            type="primary" if not st.session_state[key_cedear] else "secondary",
+            use_container_width=True
+        ):
+            st.session_state[key_cedear] = False
+            st.rerun()
+    with col_t2:
+        if st.button(
+            "✅ CEDEAR / Local ARS 🇦🇷" if st.session_state[key_cedear] else "🇦🇷 CEDEAR / Local ARS",
+            key=f"btn_cedear_{cartera_id}",
+            type="primary" if st.session_state[key_cedear] else "secondary",
+            use_container_width=True
+        ):
+            st.session_state[key_cedear] = True
+            st.rerun()
+
+    es_cedear = st.session_state[key_cedear]
+
+    if es_cedear:
+        st.info(
+            "🇦🇷 **Modo CEDEAR / Local ARS** — Precio promedio en **pesos argentinos**. "
+            "Aplica para CEDEARs (AMZN, MELI, SPY, etc.) y acciones locales (YPFD, BYMA, GGAL, etc.)"
         )
-        c4, c5, c6 = st.columns(3)
+    else:
+        st.info("🌎 **Modo Internacional USD** — Precio promedio en **dólares**.")
+
+    with st.form(f"form_posicion_{cartera_id}", clear_on_submit=True):
+        c1, c2 = st.columns(2)
+        ticker   = c1.text_input(
+            "Ticker",
+            placeholder="ej: AAPL, MELI, YPFD, SPY"
+        ).upper().strip()
+        cantidad = c2.number_input("Cantidad", min_value=0.0001, value=1.0, step=0.01)
+
+        c3, c4 = st.columns(2)
         if es_cedear:
-            precio = c4.number_input(
+            precio = c3.number_input(
                 "Precio promedio (ARS)",
                 min_value=0.01, value=1000.0, step=1.0,
-                help="Precio promedio de compra del CEDEAR en pesos argentinos"
+                help="Precio promedio de compra en pesos argentinos"
             )
             moneda = "ARS"
-            c5.info("💱 Moneda: **ARS** (automático para CEDEARs)")
+            c4.markdown("💱 **Moneda: ARS** (automático)")
         else:
-            precio = c4.number_input(
+            precio = c3.number_input(
                 "Precio promedio (USD)",
                 min_value=0.0001, value=100.0, step=0.01,
                 help="Precio promedio de compra en dólares"
             )
-            moneda = c5.selectbox("Moneda", ["USD", "ARS"])
-        fecha_ref = c6.date_input("Fecha de referencia", value=date.today())
-        notas     = st.text_input("Notas (opcional)",
-                                  placeholder="ej: Posición acumulada 2022-2024")
+            moneda = c4.selectbox("Moneda", ["USD", "ARS"])
 
-        if st.form_submit_button("✅ Agregar / Actualizar posición",
-                                  type="primary", use_container_width=True):
+        fecha_ref = st.date_input("Fecha de referencia", value=date.today())
+        notas     = st.text_input(
+            "Notas (opcional)",
+            placeholder="ej: Posición acumulada 2022-2024"
+        )
+
+        if st.form_submit_button(
+            "✅ Agregar / Actualizar posición",
+            type="primary", use_container_width=True
+        ):
             if not ticker:
                 st.error("❌ Ingresá un ticker válido.")
             else:
@@ -204,11 +239,11 @@ def _tab_agregar_posicion(cartera_id: int, nombre: str):
                     cartera_id, ticker, cantidad, precio,
                     moneda, str(fecha_ref), notas, es_cedear
                 )
-                tipo_str   = "CEDEAR 🇦🇷" if es_cedear else "Internacional 🌎"
+                tipo_str   = "CEDEAR/Local 🇦🇷" if es_cedear else "Internacional 🌎"
                 moneda_str = "ARS" if es_cedear else moneda
                 st.success(
                     f"✅ {cantidad} × {ticker} ({tipo_str}) @ "
-                    f"${precio:,.2f} {moneda_str} agregado a {nombre}"
+                    f"${precio:,.2f} {moneda_str} agregado a **{nombre}**"
                 )
                 st.rerun()
 
