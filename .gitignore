@@ -21,3 +21,8 @@ desktop.ini
 
 # Streamlit cache local
 .streamlit/secrets.toml
+
+scripts/data/cartera.db
+scripts/data/cedear_equivalencias.json
+scripts/data/resultados/
+.streamlit/secrets.toml
