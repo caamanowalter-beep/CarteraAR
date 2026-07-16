@@ -145,5 +145,5 @@ def expandir_tickers(tickers: list[str]) -> tuple[list[str], list[str]]:
     return exp, sin
 
 
-# Auto-inicializar al importar
+# Auto-inicializar al importar  (updated: 2026-07-16 03:33)
 inicializar()
