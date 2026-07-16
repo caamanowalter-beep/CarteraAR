@@ -73,7 +73,8 @@ with st.sidebar:
          "📈 Análisis Técnico",
          "🇦🇷 CEDEARs",
          "💼 Mi Cartera",
-         "📰 Info de Mercado"],
+         "📰 Info de Mercado",
+         "🏦 Bonos y ON"],
         label_visibility="collapsed"
     )
     st.markdown("---")
@@ -89,6 +90,7 @@ _PAGINAS = {
     "🇦🇷 CEDEARs":          "pages.cedears",
     "💼 Mi Cartera":         "pages.mi_cartera",
     "📰 Info de Mercado":    "pages.mercado",
+    "🏦 Bonos y ON":         "pages.bonos",
 }
 
 if pagina in _PAGINAS:

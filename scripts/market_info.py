@@ -783,3 +783,189 @@ def _recomendacion_etf(info: dict, ticker: str) -> str:
             return "Rendimiento bajo"
 
     return "Seguimiento de índice"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TIPOS DE CAMBIO (CCL, MEP, Oficial, Blue)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def obtener_tipos_cambio() -> dict:
+    """
+    Obtiene CCL, MEP, Oficial, Blue y Cripto desde APIs públicas argentinas.
+    Retorna dict con todos los tipos de cambio disponibles.
+    """
+    resultado = {
+        "CCL":       None,
+        "MEP":       None,
+        "Oficial":   None,
+        "Blue":      None,
+        "Cripto":    None,
+        "Mayorista": None,
+    }
+    mapeo = {
+        "contadoconliqui": "CCL",
+        "bolsa":           "MEP",
+        "oficial":         "Oficial",
+        "blue":            "Blue",
+        "cripto":          "Cripto",
+        "mayorista":       "Mayorista",
+    }
+    for url in [
+        "https://dolarapi.com/v1/dolares",
+        "https://api.argentinadatos.com/v1/cotizaciones/dolares",
+    ]:
+        try:
+            r = requests.get(url, timeout=8, headers={"User-Agent": "Mozilla/5.0"})
+            if r.status_code == 200:
+                for item in r.json():
+                    casa  = item.get("casa", "").lower()
+                    venta = item.get("venta")
+                    if casa in mapeo and venta and resultado[mapeo[casa]] is None:
+                        resultado[mapeo[casa]] = float(venta)
+                if resultado["CCL"] or resultado["MEP"]:
+                    break
+        except Exception:
+            pass
+    return resultado
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# BONOS SOBERANOS ARGENTINOS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def obtener_bonos_argentina() -> pd.DataFrame:
+    """
+    Obtiene datos de bonos soberanos argentinos desde APIs públicas.
+    Fuentes: ArgentinaDatos, BYMA open data.
+    Con fallback a lista de referencia de bonos conocidos.
+    """
+    bonos = []
+
+    # Fuente 1: ArgentinaDatos
+    try:
+        r = requests.get(
+            "https://api.argentinadatos.com/v1/finanzas/bonos",
+            timeout=10, headers={"User-Agent": "Mozilla/5.0"}
+        )
+        if r.status_code == 200:
+            for b in r.json():
+                bonos.append({
+                    "Ticker":   b.get("simbolo") or b.get("ticker") or "—",
+                    "Nombre":   b.get("nombre") or b.get("descripcion") or "—",
+                    "Precio":   b.get("precio") or b.get("ultimoPrecio"),
+                    "TIR":      b.get("tir") or b.get("rendimiento"),
+                    "Duration": b.get("duration") or b.get("duracion"),
+                    "Moneda":   b.get("moneda", "USD"),
+                    "Tipo":     "Soberano",
+                    "Fuente":   "ArgentinaDatos",
+                })
+    except Exception:
+        pass
+
+    # Fuente 2: BYMA open data
+    if not bonos:
+        try:
+            r = requests.get(
+                "https://open.bymadata.com.ar/vanoms-be-core/rest/api/bymadata/free/bnown",
+                timeout=10, headers={"User-Agent": "Mozilla/5.0"}
+            )
+            if r.status_code == 200:
+                data  = r.json()
+                items = data if isinstance(data, list) else data.get("data", [])
+                for b in items[:60]:
+                    ticker = (b.get("symbol") or b.get("simbolo") or "").strip()
+                    if ticker:
+                        bonos.append({
+                            "Ticker":   ticker,
+                            "Nombre":   b.get("description") or b.get("descripcion") or ticker,
+                            "Precio":   b.get("price") or b.get("precio") or b.get("settlementPrice"),
+                            "TIR":      b.get("yield") or b.get("tir"),
+                            "Duration": b.get("duration") or b.get("duracion"),
+                            "Moneda":   "USD" if any(x in ticker for x in ["D","GD","AL"]) else "ARS",
+                            "Tipo":     "Soberano/Letra",
+                            "Fuente":   "BYMA",
+                        })
+        except Exception:
+            pass
+
+    # Fallback: lista de referencia
+    if not bonos:
+        for t, n, m in [
+            ("AL29","Bono Soberano USD Ley Arg 2029","USD"),
+            ("GD29","Bono Soberano USD Ley NY 2029","USD"),
+            ("AL30","Bono Soberano USD Ley Arg 2030","USD"),
+            ("GD30","Bono Soberano USD Ley NY 2030","USD"),
+            ("AL35","Bono Soberano USD Ley Arg 2035","USD"),
+            ("GD35","Bono Soberano USD Ley NY 2035","USD"),
+            ("AL41","Bono Soberano USD Ley Arg 2041","USD"),
+            ("GD41","Bono Soberano USD Ley NY 2041","USD"),
+            ("TX26","Bono CER 2026","ARS"),
+            ("TX28","Bono CER 2028","ARS"),
+            ("S31E5","Letra del Tesoro ARS","ARS"),
+        ]:
+            bonos.append({"Ticker":t,"Nombre":n,"Precio":None,"TIR":None,
+                          "Duration":None,"Moneda":m,"Tipo":"Soberano","Fuente":"Referencia"})
+
+    df = pd.DataFrame(bonos)
+    for col in ["Precio","TIR","Duration"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+    return df
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# OBLIGACIONES NEGOCIABLES (ON) CORPORATIVAS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def obtener_on_argentina() -> pd.DataFrame:
+    """
+    Obtiene Obligaciones Negociables corporativas argentinas desde BYMA.
+    Con fallback a lista de ONs conocidas.
+    """
+    ons = []
+
+    try:
+        r = requests.get(
+            "https://open.bymadata.com.ar/vanoms-be-core/rest/api/bymadata/free/obligaciones-negociables",
+            timeout=10, headers={"User-Agent": "Mozilla/5.0"}
+        )
+        if r.status_code == 200:
+            data  = r.json()
+            items = data if isinstance(data, list) else data.get("data", [])
+            for on in items[:100]:
+                ticker = (on.get("symbol") or on.get("simbolo") or "").strip()
+                if ticker:
+                    ons.append({
+                        "Ticker":      ticker,
+                        "Emisor":      on.get("issuer") or on.get("emisor") or on.get("description") or ticker,
+                        "Precio":      on.get("price") or on.get("precio") or on.get("settlementPrice"),
+                        "TIR":         on.get("yield") or on.get("tir"),
+                        "Duration":    on.get("duration") or on.get("duracion"),
+                        "Moneda":      on.get("currency") or ("USD" if "D" in ticker else "ARS"),
+                        "Vencimiento": on.get("maturityDate") or on.get("vencimiento") or "—",
+                        "Tipo":        "ON Corporativa",
+                    })
+    except Exception:
+        pass
+
+    # Fallback: ONs conocidas
+    if not ons:
+        for t, e, m, v in [
+            ("YCA6O","YPF SA","USD","2026"),
+            ("YMCXO","YPF SA","USD","2029"),
+            ("PNDCO","Pampa Energía","USD","2027"),
+            ("TLCMO","Telecom Argentina","USD","2026"),
+            ("IRCFO","IRSA","USD","2028"),
+            ("GNCXO","Genneia","USD","2027"),
+            ("MRCAO","Mercado Libre","USD","2028"),
+            ("BRCAO","Banco Macro","USD","2026"),
+            ("CSCPO","Cresud","USD","2026"),
+            ("SUPVO","Supervielle","USD","2027"),
+        ]:
+            ons.append({"Ticker":t,"Emisor":e,"Precio":None,"TIR":None,
+                        "Duration":None,"Moneda":m,"Vencimiento":v,"Tipo":"ON Corporativa"})
+
+    df = pd.DataFrame(ons)
+    for col in ["Precio","TIR","Duration"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+    return df

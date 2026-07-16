@@ -215,10 +215,16 @@ def render():
 
     # ── Parseo de tickers ─────────────────────────────────────────────────────
     raw = [core.corregir_ticker(t.strip()) for t in tickers_input.split(",") if t.strip()]
-    tickers_exp, sin_equiv = cedear_mapper.expandir_tickers(raw)
 
-    if sin_equiv:
-        st.warning(f"⚠️ Sin equivalencia ADR: {', '.join(sin_equiv)}")
+    # Expandir tickers con manejo de error robusto
+    try:
+        tickers_exp, sin_equiv = cedear_mapper.expandir_tickers(raw)
+        if sin_equiv:
+            st.warning(f"⚠️ Sin equivalencia ADR: {', '.join(sin_equiv)}")
+    except Exception:
+        # Fallback: usar tickers tal como vienen sin expansión ADR
+        tickers_exp = [t for t in raw if t and not t.endswith(".BA")]
+        sin_equiv   = []
 
     # ── Descarga de precios ───────────────────────────────────────────────────
     with st.spinner("📥 Descargando precios históricos..."):
