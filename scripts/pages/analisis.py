@@ -134,12 +134,69 @@ def render():
 
     # ── Sidebar de parámetros ─────────────────────────────────────────────────
     with st.sidebar:
-        st.markdown("### ⚙️ Parámetros")
-        tickers_input = st.text_area(
-            "Tickers (separados por coma)",
-            value="AAPL, MSFT, NVDA, KO, QQQ, SPY, VIST, MELI",
-            height=100
+        st.markdown("### ⚙️ Fuente de tickers")
+
+        # Selector de fuente
+        fuente = st.radio(
+            "Analizar",
+            ["📝 Tickers manuales", "💼 Desde Mi Cartera"],
+            index=0
         )
+
+        tickers_input = ""
+        if fuente == "💼 Desde Mi Cartera":
+            # Importar cartera_db para leer carteras
+            try:
+                import cartera_db
+                df_carteras = cartera_db.listar_carteras()
+                if df_carteras.empty:
+                    st.warning("No tenés carteras creadas. Usá tickers manuales.")
+                    fuente = "📝 Tickers manuales"
+                else:
+                    opciones_cart = {
+                        f"{row['nombre']} ({row['moneda_base']})": row['id']
+                        for _, row in df_carteras.iterrows()
+                    }
+                    # Opción para analizar todas las carteras combinadas
+                    opciones_cart["🔀 Todas las carteras"] = -1
+                    sel_cart = st.selectbox(
+                        "Seleccioná cartera",
+                        list(opciones_cart.keys()),
+                        key="analisis_cartera_sel"
+                    )
+                    cart_id = opciones_cart[sel_cart]
+
+                    if cart_id == -1:
+                        # Todas las carteras
+                        tickers_set = set()
+                        for _, row in df_carteras.iterrows():
+                            df_pos = cartera_db.listar_posiciones(row['id'])
+                            if not df_pos.empty:
+                                tickers_set.update(df_pos["ticker"].tolist())
+                        tickers_lista = list(tickers_set)
+                    else:
+                        df_pos = cartera_db.listar_posiciones(cart_id)
+                        tickers_lista = df_pos["ticker"].tolist() if not df_pos.empty else []
+
+                    if tickers_lista:
+                        st.success(f"✅ {len(tickers_lista)} tickers: {', '.join(tickers_lista)}")
+                        tickers_input = ", ".join(tickers_lista)
+                    else:
+                        st.warning("La cartera no tiene posiciones.")
+                        fuente = "📝 Tickers manuales"
+            except Exception as e:
+                st.warning(f"No se pudo leer Mi Cartera: {e}")
+                fuente = "📝 Tickers manuales"
+
+        if fuente == "📝 Tickers manuales":
+            tickers_input = st.text_area(
+                "Tickers (separados por coma)",
+                value=tickers_input or "AAPL, MSFT, NVDA, KO, QQQ, SPY, VIST, MELI",
+                height=100
+            )
+
+        st.markdown("---")
+        st.markdown("### ⚙️ Parámetros")
         anios = st.slider("Años de historia", 1, 15, 10)
         st.markdown("**Filtros fundamentales**")
         margen_min = st.slider("Margen Neto mínimo (%)", 0, 50, 20) / 100
@@ -149,7 +206,11 @@ def render():
         correr = st.button("▶️ Analizar", type="primary", use_container_width=True)
 
     if not correr:
-        st.info("👈 Configurá los parámetros en el panel izquierdo y presioná **Analizar**.")
+        st.info("👈 Seleccioná la fuente de tickers en el panel izquierdo y presioná **Analizar**.")
+        return
+
+    if not tickers_input.strip():
+        st.error("❌ No hay tickers para analizar.")
         return
 
     # ── Parseo de tickers ─────────────────────────────────────────────────────
