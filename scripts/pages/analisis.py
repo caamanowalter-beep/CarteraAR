@@ -305,7 +305,7 @@ def render():
                 "Varianza":            "{:.4f}",
                 "Desviación estándar": "{:.2%}",
                 "Proporción":          "{:.2%}"
-            }).background_gradient(subset=["Retorno esperado"], cmap="Greens"),
+            }).map(lambda v: "color: #00c896; font-weight: bold" if isinstance(v, (int,float)) and v > 0.15 else ("color: #f7a34f" if isinstance(v, (int,float)) and v > 0.05 else ""), subset=["Retorno esperado"]),
             use_container_width=True, hide_index=True
         )
         if not reporte_elim.empty:
@@ -356,7 +356,7 @@ def render():
                 "P/Book":      lambda v: _fmt_num(v,2) if v else "—",
                 "Free CF":     lambda v: f"${v/1e9:.1f}B" if v else "—",
                 "Score (0-100)": "{:.0f}",
-            }).background_gradient(subset=["Score (0-100)"], cmap="RdYlGn", vmin=0, vmax=100),
+            }).map(lambda v: "background-color: #1b2d1b; color: #00c896" if isinstance(v, (int,float)) and v >= 65 else ("background-color: #2d2a1b; color: #f7a34f" if isinstance(v, (int,float)) and v >= 45 else "background-color: #2d1b1b; color: #f74f4f") if isinstance(v, (int,float)) else "", subset=["Score (0-100)"]),
             use_container_width=True, hide_index=True
         )
 

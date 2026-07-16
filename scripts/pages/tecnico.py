@@ -467,11 +467,45 @@ def render():
     # ── Sidebar ───────────────────────────────────────────────────────────────
     with st.sidebar:
         st.markdown("### ⚙️ Configuración")
-        ticker_input = st.text_input(
-            "Ticker a analizar",
-            value="AAPL",
-            placeholder="ej: AAPL, MSFT, MELI"
-        ).upper().strip()
+
+        # Fuente del ticker
+        fuente_tec = st.radio(
+            "Fuente",
+            ["📝 Ticker manual", "💼 Desde Mi Cartera"],
+            index=0, key="tec_fuente"
+        )
+
+        ticker_input = ""
+        if fuente_tec == "💼 Desde Mi Cartera":
+            try:
+                import cartera_db
+                df_carteras = cartera_db.listar_carteras()
+                if not df_carteras.empty:
+                    opciones = {f"{r['nombre']}": r['id']
+                                for _, r in df_carteras.iterrows()}
+                    sel_c = st.selectbox("Cartera", list(opciones.keys()), key="tec_cart")
+                    cid   = opciones[sel_c]
+                    dp    = cartera_db.listar_posiciones(cid)
+                    if not dp.empty:
+                        tickers_cart = dp["ticker"].tolist()
+                        ticker_input = st.selectbox(
+                            "Ticker a analizar",
+                            tickers_cart,
+                            key="tec_ticker_cart"
+                        )
+                    else:
+                        st.warning("Cartera sin posiciones")
+                else:
+                    st.warning("Sin carteras creadas")
+            except Exception as e:
+                st.warning(f"Error: {e}")
+
+        if fuente_tec == "📝 Ticker manual" or not ticker_input:
+            ticker_input = st.text_input(
+                "Ticker a analizar",
+                value=ticker_input or "AAPL",
+                placeholder="ej: AAPL, MSFT, MELI"
+            ).upper().strip()
         periodo = st.selectbox(
             "Período de datos",
             ["1y", "2y", "3y", "5y"],

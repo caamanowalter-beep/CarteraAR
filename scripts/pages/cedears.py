@@ -109,11 +109,49 @@ def render():
 
         # Tickers a analizar
         st.markdown("**Tickers a analizar**")
-        tickers_input = st.text_area(
-            "Tickers (separados por coma)",
-            value="YPFD, BMA, GGAL, PAMP, TECO2, CEPU, BBAR, EDN, IRSA",
-            height=100
+        # Fuente de tickers
+        fuente_ced = st.radio(
+            "Fuente de tickers",
+            ["📝 Ingresar manualmente", "💼 Desde Mi Cartera"],
+            index=0, key="ced_fuente"
         )
+
+        tickers_input = ""
+        if fuente_ced == "💼 Desde Mi Cartera":
+            try:
+                import cartera_db as cdb
+                df_carteras = cdb.listar_carteras()
+                if not df_carteras.empty:
+                    opciones = {f"{r['nombre']} ({r['moneda_base']})": r['id']
+                                for _, r in df_carteras.iterrows()}
+                    opciones["🔀 Todas las carteras"] = -1
+                    sel_c = st.selectbox("Cartera", list(opciones.keys()), key="ced_cart_sel")
+                    cid   = opciones[sel_c]
+                    if cid == -1:
+                        tickers_set = set()
+                        for _, r in df_carteras.iterrows():
+                            dp = cdb.listar_posiciones(r['id'])
+                            if not dp.empty:
+                                # Solo CEDEARs (es_cedear=1) o todos
+                                tickers_set.update(dp["ticker"].tolist())
+                        tickers_input = ", ".join(list(tickers_set))
+                    else:
+                        dp = cdb.listar_posiciones(cid)
+                        if not dp.empty:
+                            tickers_input = ", ".join(dp["ticker"].tolist())
+                    if tickers_input:
+                        st.success(f"✅ Tickers: {tickers_input}")
+                else:
+                    st.warning("Sin carteras creadas")
+            except Exception as e:
+                st.warning(f"Error: {e}")
+
+        if fuente_ced == "📝 Ingresar manualmente" or not tickers_input:
+            tickers_input = st.text_area(
+                "Tickers (separados por coma)",
+                value=tickers_input or "YPFD, BMA, GGAL, PAMP, TECO2, CEPU, BBAR, EDN, IRSA",
+                height=100
+            )
         analizar = st.button("▶️ Analizar CEDEARs", type="primary", use_container_width=True)
 
     if not analizar:

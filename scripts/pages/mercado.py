@@ -539,14 +539,33 @@ def render():
         )
 
         if fuente == "💼 Usar Mi Cartera":
-            df_pos = cartera_db.listar_posiciones()
-            if df_pos.empty:
-                st.warning("No hay posiciones en Mi Cartera.")
+            try:
+                df_carteras = cartera_db.listar_carteras()
+                if df_carteras.empty:
+                    st.warning("No hay carteras creadas.")
+                    tickers_lista = []
+                else:
+                    opciones = {f"{r['nombre']} ({r['moneda_base']})": r['id']
+                                for _, r in df_carteras.iterrows()}
+                    opciones["🔀 Todas"] = -1
+                    sel = st.selectbox("Cartera", list(opciones.keys()), key="merc_cart_sel")
+                    cid = opciones[sel]
+                    if cid == -1:
+                        tickers_set = set()
+                        for _, r in df_carteras.iterrows():
+                            dp = cartera_db.listar_posiciones(r['id'])
+                            if not dp.empty:
+                                tickers_set.update(dp["ticker"].tolist())
+                        tickers_lista = list(tickers_set)
+                    else:
+                        dp = cartera_db.listar_posiciones(cid)
+                        tickers_lista = dp["ticker"].tolist() if not dp.empty else []
+                    if tickers_lista:
+                        st.success(f"✅ {len(tickers_lista)} tickers")
+                        st.caption(", ".join(tickers_lista))
+            except Exception as e:
+                st.warning(f"Error: {e}")
                 tickers_lista = []
-            else:
-                tickers_lista = df_pos["ticker"].unique().tolist()
-                st.success(f"✅ {len(tickers_lista)} tickers de Mi Cartera")
-                st.caption(", ".join(tickers_lista))
         else:
             tickers_input = st.text_area(
                 "Tickers (separados por coma)",
