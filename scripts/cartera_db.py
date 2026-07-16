@@ -386,8 +386,21 @@ def calcular_pnl(cartera_id: int, ccl: float = 1200.0) -> pd.DataFrame:
                 ticker_ba = t.upper() + ".BA" if not t.upper().endswith(".BA") else t.upper()
                 info_ba   = yf.Ticker(ticker_ba).info
                 p_ars     = info_ba.get("currentPrice") or info_ba.get("regularMarketPrice")
-                if p_ars and float(p_ars) > 10:
-                    precios_ars[t] = float(p_ars)
+                if p_ars:
+                    p_ars_float = float(p_ars)
+                    # Rango razonable para CEDEARs en ARS: $10 a $500.000
+                    # Yahoo Finance a veces devuelve el precio con punto como
+                    # separador de miles (ej: 2790.0 = $2.790 ARS) — correcto.
+                    # Si viene como 2790000 es un error de escala.
+                    if 10 <= p_ars_float <= 500_000:
+                        precios_ars[t] = p_ars_float
+                    elif p_ars_float > 500_000:
+                        # Intentar corregir dividiendo por 1000
+                        p_corregido = p_ars_float / 1000
+                        if 10 <= p_corregido <= 500_000:
+                            precios_ars[t] = p_corregido
+                        else:
+                            precios_ars[t] = p_ars_float / 1_000_000
             else:
                 info  = yf.Ticker(t).info
                 p_usd = info.get("currentPrice") or info.get("regularMarketPrice")
