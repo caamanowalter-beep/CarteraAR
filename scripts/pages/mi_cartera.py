@@ -220,9 +220,11 @@ def _tab_agregar_posicion(cartera_id: int, nombre: str):
         ticker_del = st.selectbox(
             "Seleccioná el ticker a eliminar",
             df_pos["ticker"].tolist(),
-            key="del_pos_sel"
+            key=f"del_pos_sel_{cartera_id}"
         )
-        if st.button(f"🗑️ Eliminar {ticker_del} de {nombre}", type="secondary"):
+        if st.button(f"🗑️ Eliminar {ticker_del} de {nombre}",
+                     type="secondary",
+                     key=f"btn_del_pos_{cartera_id}"):
             cartera_db.eliminar_posicion(cartera_id, ticker_del)
             st.warning(f"🗑️ {ticker_del} eliminado de {nombre}")
             st.rerun()
