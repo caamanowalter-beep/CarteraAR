@@ -37,9 +37,15 @@ if USE_POSTGRES:
     try:
         import psycopg2
         import psycopg2.extras
+        # Verificar conexión al importar
+        _test_con = psycopg2.connect(DATABASE_URL, connect_timeout=5)
+        _test_con.close()
         print("✅ Usando PostgreSQL (Supabase)")
     except ImportError:
         print("⚠️ psycopg2 no instalado — usando SQLite local")
+        USE_POSTGRES = False
+    except Exception as _e:
+        print(f"⚠️ No se pudo conectar a PostgreSQL ({_e}) — usando SQLite local")
         USE_POSTGRES = False
 
 _SQLITE_PATH = os.path.join(
@@ -113,17 +119,7 @@ def init_db() -> None:
             creada      TEXT    NOT NULL,
             activa      INTEGER NOT NULL DEFAULT 1
         )""",
-        f"""CREATE TABLE IF NOT EXISTS posiciones (
-            id               {pk} PRIMARY KEY {ai},
-            cartera_id       INTEGER NOT NULL,
-            ticker           TEXT    NOT NULL,
-            cantidad         REAL    NOT NULL,
-            precio_promedio  REAL    NOT NULL,
-            moneda           TEXT    NOT NULL DEFAULT 'USD',
-            fecha_referencia TEXT    NOT NULL,
-            notas            TEXT,
-            UNIQUE(cartera_id, ticker)
-        )""",
+        
         f"""CREATE TABLE IF NOT EXISTS movimientos (
             id         {pk} PRIMARY KEY {ai},
             cartera_id INTEGER NOT NULL,
@@ -205,33 +201,42 @@ def get_cartera_id(nombre: str) -> int | None:
 
 def agregar_posicion(cartera_id: int, ticker: str, cantidad: float,
                      precio_promedio: float, moneda: str = "USD",
-                     fecha_referencia: str = None, notas: str = "") -> None:
+                     fecha_referencia: str = None, notas: str = "",
+                     es_cedear: bool = False) -> None:
+    """
+    es_cedear=True: el ticker es un CEDEAR argentino.
+    En ese caso el precio_promedio está en ARS y el precio actual
+    se obtiene del ticker .BA (cotización en BYMA en ARS).
+    """
     if fecha_referencia is None:
         fecha_referencia = date.today().strftime("%Y-%m-%d")
+    # Si es CEDEAR, forzar moneda ARS
+    if es_cedear:
+        moneda = "ARS"
     if USE_POSTGRES:
         _execute("""
             INSERT INTO posiciones
                 (cartera_id, ticker, cantidad, precio_promedio, moneda,
-                 fecha_referencia, notas)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+                 fecha_referencia, notas, es_cedear)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (cartera_id, ticker) DO UPDATE SET
                 cantidad=EXCLUDED.cantidad, precio_promedio=EXCLUDED.precio_promedio,
                 moneda=EXCLUDED.moneda, fecha_referencia=EXCLUDED.fecha_referencia,
-                notas=EXCLUDED.notas
+                notas=EXCLUDED.notas, es_cedear=EXCLUDED.es_cedear
         """, (cartera_id, ticker.upper(), cantidad, precio_promedio,
-              moneda.upper(), fecha_referencia, notas))
+              moneda.upper(), fecha_referencia, notas, int(es_cedear)))
     else:
         _execute("""
             INSERT INTO posiciones
                 (cartera_id, ticker, cantidad, precio_promedio, moneda,
-                 fecha_referencia, notas)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                 fecha_referencia, notas, es_cedear)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(cartera_id, ticker) DO UPDATE SET
                 cantidad=excluded.cantidad, precio_promedio=excluded.precio_promedio,
                 moneda=excluded.moneda, fecha_referencia=excluded.fecha_referencia,
-                notas=excluded.notas
+                notas=excluded.notas, es_cedear=excluded.es_cedear
         """, (cartera_id, ticker.upper(), cantidad, precio_promedio,
-              moneda.upper(), fecha_referencia, notas))
+              moneda.upper(), fecha_referencia, notas, int(es_cedear)))
 
 def eliminar_posicion(cartera_id: int, ticker: str) -> None:
     _execute("DELETE FROM posiciones WHERE cartera_id=? AND ticker=?",
@@ -354,44 +359,105 @@ def listar_ganancias_realizadas(cartera_id: int) -> pd.DataFrame:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def calcular_pnl(cartera_id: int, ccl: float = 1200.0) -> pd.DataFrame:
+    """
+    Calcula P&L en tiempo real.
+    Para CEDEARs (es_cedear=1):
+      - precio_promedio está en ARS (lo que pagaste en BYMA)
+      - precio actual se obtiene del ticker .BA (cotización ARS en BYMA)
+      - la comparación es ARS vs ARS → P&L correcto sin distorsión
+    Para acciones internacionales (es_cedear=0):
+      - precio_promedio en USD
+      - precio actual en USD desde NYSE/NASDAQ
+    """
     df_pos = listar_posiciones(cartera_id)
     if df_pos.empty:
         return pd.DataFrame()
-    tickers = df_pos["ticker"].unique().tolist()
-    precios = {}
-    try:
-        for t in tickers:
-            info = yf.Ticker(t).info
-            p    = info.get("currentPrice") or info.get("regularMarketPrice")
-            if p: precios[t] = float(p)
-    except Exception:
-        pass
+
+    # Descargar precios según tipo de activo
+    precios_usd = {}  # ticker → precio en USD (acciones internacionales)
+    precios_ars = {}  # ticker → precio en ARS (CEDEARs vía .BA)
+
+    for _, pos in df_pos.iterrows():
+        t         = pos["ticker"]
+        es_cedear = int(pos.get("es_cedear", 0)) == 1
+        try:
+            if es_cedear:
+                # Buscar precio ARS del CEDEAR en BYMA
+                ticker_ba = t.upper() + ".BA" if not t.upper().endswith(".BA") else t.upper()
+                info_ba   = yf.Ticker(ticker_ba).info
+                p_ars     = info_ba.get("currentPrice") or info_ba.get("regularMarketPrice")
+                if p_ars and float(p_ars) > 10:
+                    precios_ars[t] = float(p_ars)
+            else:
+                info  = yf.Ticker(t).info
+                p_usd = info.get("currentPrice") or info.get("regularMarketPrice")
+                if p_usd:
+                    precios_usd[t] = float(p_usd)
+        except Exception:
+            pass
+
     rows = []
     for _, pos in df_pos.iterrows():
         t             = pos["ticker"]
         cantidad      = float(pos["cantidad"])
         precio_compra = float(pos["precio_promedio"])
         moneda        = pos["moneda"]
-        precio_actual = precios.get(t)
-        precio_compra_usd = precio_compra / ccl if moneda == "ARS" and ccl > 0 else precio_compra
-        costo_total  = precio_compra_usd * cantidad
-        valor_actual = (precio_actual * cantidad) if precio_actual else None
-        gan_usd      = (valor_actual - costo_total) if valor_actual else None
-        gan_pct      = (gan_usd / costo_total * 100) if gan_usd and costo_total else None
-        gan_ars      = (gan_usd * ccl) if gan_usd else None
-        rows.append({
-            "Ticker":              t,
-            "Cantidad":            cantidad,
-            "Precio promedio":     round(precio_compra_usd, 2),
-            "Moneda orig.":        moneda,
-            "Precio actual (USD)": round(precio_actual, 2) if precio_actual else None,
-            "Costo total (USD)":   round(costo_total, 2),
-            "Valor actual (USD)":  round(valor_actual, 2) if valor_actual else None,
-            "Ganancia (USD)":      round(gan_usd, 2) if gan_usd else None,
-            "Ganancia (%)":        round(gan_pct, 2) if gan_pct else None,
-            "Ganancia (ARS)":      round(gan_ars, 0) if gan_ars else None,
-            "Notas":               pos.get("notas", ""),
-        })
+        es_cedear     = int(pos.get("es_cedear", 0)) == 1
+
+        if es_cedear:
+            # ── CEDEAR: todo en ARS ──────────────────────────────────────────
+            precio_actual_ars = precios_ars.get(t)
+            costo_ars         = precio_compra * cantidad
+            valor_ars         = (precio_actual_ars * cantidad) if precio_actual_ars else None
+            gan_ars           = (valor_ars - costo_ars) if valor_ars else None
+            gan_pct           = (gan_ars / costo_ars * 100) if gan_ars and costo_ars else None
+            # Convertir a USD para comparación entre carteras
+            costo_usd  = costo_ars / ccl if ccl > 0 else None
+            valor_usd  = valor_ars / ccl if valor_ars and ccl > 0 else None
+            gan_usd    = gan_ars / ccl if gan_ars and ccl > 0 else None
+            precio_usd_display = precio_actual_ars / ccl if precio_actual_ars and ccl > 0 else None
+
+            rows.append({
+                "Ticker":              t,
+                "Tipo":                "CEDEAR 🇦🇷",
+                "Cantidad":            cantidad,
+                "Precio promedio":     round(precio_compra, 2),
+                "Moneda orig.":        "ARS",
+                "Precio actual (ARS)": round(precio_actual_ars, 2) if precio_actual_ars else None,
+                "Precio actual (USD)": round(precio_usd_display, 2) if precio_usd_display else None,
+                "Costo total (USD)":   round(costo_usd, 2) if costo_usd else None,
+                "Valor actual (USD)":  round(valor_usd, 2) if valor_usd else None,
+                "Ganancia (USD)":      round(gan_usd, 2) if gan_usd else None,
+                "Ganancia (%)":        round(gan_pct, 2) if gan_pct else None,
+                "Ganancia (ARS)":      round(gan_ars, 0) if gan_ars else None,
+                "Notas":               pos.get("notas", ""),
+            })
+        else:
+            # ── Acción internacional: todo en USD ────────────────────────────
+            precio_actual_usd = precios_usd.get(t)
+            precio_compra_usd = precio_compra / ccl if moneda == "ARS" and ccl > 0 else precio_compra
+            costo_total       = precio_compra_usd * cantidad
+            valor_actual      = (precio_actual_usd * cantidad) if precio_actual_usd else None
+            gan_usd           = (valor_actual - costo_total) if valor_actual else None
+            gan_pct           = (gan_usd / costo_total * 100) if gan_usd and costo_total else None
+            gan_ars           = (gan_usd * ccl) if gan_usd else None
+
+            rows.append({
+                "Ticker":              t,
+                "Tipo":                "Internacional 🌎",
+                "Cantidad":            cantidad,
+                "Precio promedio":     round(precio_compra_usd, 2),
+                "Moneda orig.":        moneda,
+                "Precio actual (ARS)": None,
+                "Precio actual (USD)": round(precio_actual_usd, 2) if precio_actual_usd else None,
+                "Costo total (USD)":   round(costo_total, 2),
+                "Valor actual (USD)":  round(valor_actual, 2) if valor_actual else None,
+                "Ganancia (USD)":      round(gan_usd, 2) if gan_usd else None,
+                "Ganancia (%)":        round(gan_pct, 2) if gan_pct else None,
+                "Ganancia (ARS)":      round(gan_ars, 0) if gan_ars else None,
+                "Notas":               pos.get("notas", ""),
+            })
+
     return pd.DataFrame(rows)
 
 def resumen_cartera(df_pnl: pd.DataFrame) -> dict:
