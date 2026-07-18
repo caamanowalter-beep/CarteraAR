@@ -812,7 +812,11 @@ def calcular_pnl_fci(cartera_id: int, ccl: float = 1200.0,
                       valores_actuales: dict = None) -> pd.DataFrame:
     """
     Calcula P&L de FCIs.
-    valores_actuales: dict {nombre_fondo: valor_cuotaparte_actual}
+    IMPORTANTE: En Argentina, el VCP (valor cuotaparte) de TODOS los FCIs
+    está expresado en ARS, incluso los fondos "dólar" o "USD".
+    La columna 'moneda' indica la moneda de INVERSIÓN del fondo, no del VCP.
+    
+    valores_actuales: dict {nombre_fondo: valor_cuotaparte_actual_en_ARS}
     """
     df = listar_fci(cartera_id)
     if df.empty:
@@ -822,8 +826,8 @@ def calcular_pnl_fci(cartera_id: int, ccl: float = 1200.0,
     for _, pos in df.iterrows():
         nombre     = pos["nombre_fondo"]
         cuotas     = float(pos["cuotapartes"])
-        vcp_compra = float(pos["valor_cuotaparte"])
-        moneda     = pos["moneda"]
+        vcp_compra = float(pos["valor_cuotaparte"])  # siempre en ARS
+        moneda     = pos["moneda"]  # moneda de inversión del fondo
         tipo       = pos.get("tipo_fondo", "—")
         gerenc     = pos.get("gerenciadora", "—")
 
@@ -831,26 +835,32 @@ def calcular_pnl_fci(cartera_id: int, ccl: float = 1200.0,
         if vcp_actual is None:
             vcp_actual = vcp_compra
 
-        costo  = cuotas * vcp_compra
-        valor  = cuotas * vcp_actual
-        gan    = valor - costo
-        gan_pct = (gan / costo * 100) if costo > 0 else 0
+        # Cálculo en ARS (VCP siempre en ARS)
+        costo_ars  = cuotas * vcp_compra
+        valor_ars  = cuotas * vcp_actual
+        gan_ars    = valor_ars - costo_ars
+        gan_pct    = (gan_ars / costo_ars * 100) if costo_ars > 0 else 0
 
-        # Convertir a USD
-        factor = ccl if moneda == "ARS" and ccl > 0 else 1
+        # Convertir a USD usando CCL
+        costo_usd  = costo_ars / ccl if ccl > 0 else 0
+        valor_usd  = valor_ars / ccl if ccl > 0 else 0
+        gan_usd    = gan_ars / ccl if ccl > 0 else 0
+
         rows.append({
             "Fondo":              nombre,
             "Gerenciadora":       gerenc or "—",
             "Tipo":               tipo,
             "Cuotapartes":        cuotas,
-            "VCP compra":         round(vcp_compra, 4),
-            "VCP actual":         round(vcp_actual, 4),
-            "Moneda":             moneda,
-            "Costo (USD)":        round(costo / factor, 2),
-            "Valor actual (USD)": round(valor / factor, 2),
-            "Ganancia (USD)":     round(gan / factor, 2),
+            "VCP compra (ARS)":   round(vcp_compra, 4),
+            "VCP actual (ARS)":   round(vcp_actual, 4),
+            "Moneda fondo":       moneda,
+            "Costo (ARS)":        round(costo_ars, 2),
+            "Valor actual (ARS)": round(valor_ars, 2),
+            "Costo (USD)":        round(costo_usd, 2),
+            "Valor actual (USD)": round(valor_usd, 2),
+            "Ganancia (USD)":     round(gan_usd, 2),
             "Ganancia (%)":       round(gan_pct, 2),
-            "Ganancia (ARS)":     round(gan, 0) if moneda == "ARS" else round(gan * ccl, 0),
+            "Ganancia (ARS)":     round(gan_ars, 0),
         })
     return pd.DataFrame(rows)
 

@@ -818,17 +818,30 @@ def _tab_fci(cartera_id: int, nombre: str, ccl: float):
         c2.metric("📥 Costo total (USD)",  f"${df_pnl_fci['Costo (USD)'].sum():,.2f}")
         c3.metric("📈 Ganancia (USD)", f"${df_pnl_fci['Ganancia (USD)'].sum():+,.2f}")
         c4.metric("📊 Fondos", len(df_pnl_fci))
+        # Columnas a mostrar según disponibilidad
+        cols_fci = [c for c in [
+            "Fondo", "Gerenciadora", "Tipo", "Cuotapartes",
+            "VCP compra (ARS)", "VCP actual (ARS)", "Moneda fondo",
+            "Costo (ARS)", "Valor actual (ARS)",
+            "Costo (USD)", "Valor actual (USD)",
+            "Ganancia (USD)", "Ganancia (%)", "Ganancia (ARS)"
+        ] if c in df_pnl_fci.columns]
+
+        fmt_fci = {}
+        for col in cols_fci:
+            if "VCP" in col:        fmt_fci[col] = "${:,.4f}"
+            elif "ARS)" in col:     fmt_fci[col] = "${:,.0f}"
+            elif "USD)" in col:     fmt_fci[col] = "${:,.2f}"
+            elif "%" in col:        fmt_fci[col] = "{:+.2f}%"
+            elif col == "Cuotapartes": fmt_fci[col] = "{:,.2f}"
+
         st.dataframe(
-            df_pnl_fci.style
-                .map(_color_ganancia, subset=["Ganancia (USD)", "Ganancia (%)"])
-                .format({
-                    "Cuotapartes": "{:,.2f}", "VCP compra": "${:.4f}", "VCP actual": "${:.4f}",
-                    "Costo (USD)": "${:,.2f}", "Valor actual (USD)": "${:,.2f}",
-                    "Ganancia (USD)": "${:+,.2f}", "Ganancia (%)": "{:+.2f}%",
-                    "Ganancia (ARS)": "${:+,.0f}",
-                }),
+            df_pnl_fci[cols_fci].style
+                .map(_color_ganancia, subset=[c for c in ["Ganancia (USD)", "Ganancia (%)"] if c in cols_fci])
+                .format(fmt_fci),
             use_container_width=True, hide_index=True
         )
+        st.caption("ℹ️ VCP = Valor Cuotaparte en ARS. Todos los FCIs argentinos cotizan en pesos, incluso los fondos 'dólar'.")
     st.markdown("---")
     
     # ── Editar FCI ────────────────────────────────────────────────────────────
