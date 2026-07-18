@@ -113,11 +113,12 @@ def init_db() -> None:
     tablas = [
         f"""CREATE TABLE IF NOT EXISTS carteras (
             id          {pk} PRIMARY KEY {ai},
-            nombre      TEXT    NOT NULL UNIQUE,
+            nombre      TEXT    NOT NULL,
             descripcion TEXT,
             moneda_base TEXT    NOT NULL DEFAULT 'USD',
             creada      TEXT    NOT NULL,
-            activa      INTEGER NOT NULL DEFAULT 1
+            activa      INTEGER NOT NULL DEFAULT 1,
+            usuario_id  INTEGER DEFAULT NULL
         )""",
         
         f"""CREATE TABLE IF NOT EXISTS movimientos (
@@ -196,19 +197,42 @@ def init_db() -> None:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def crear_cartera(nombre: str, descripcion: str = "",
-                  moneda_base: str = "USD") -> int:
+                  moneda_base: str = "USD",
+                  usuario_id: int = None) -> int:
+    """
+    Crea una nueva cartera.
+    usuario_id: si se provee, asocia la cartera al usuario.
+    """
     try:
-        return _execute_returning(
-            "INSERT INTO carteras (nombre, descripcion, moneda_base, creada) "
-            "VALUES (?, ?, ?, ?)",
-            (nombre.strip(), descripcion.strip(), moneda_base.upper(),
-             datetime.now().strftime("%Y-%m-%d"))
-        )
+        if usuario_id is not None:
+            return _execute_returning(
+                "INSERT INTO carteras (nombre, descripcion, moneda_base, creada, usuario_id) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (nombre.strip(), descripcion.strip(), moneda_base.upper(),
+                 datetime.now().strftime("%Y-%m-%d"), usuario_id)
+            )
+        else:
+            return _execute_returning(
+                "INSERT INTO carteras (nombre, descripcion, moneda_base, creada) "
+                "VALUES (?, ?, ?, ?)",
+                (nombre.strip(), descripcion.strip(), moneda_base.upper(),
+                 datetime.now().strftime("%Y-%m-%d"))
+            )
     except Exception:
         df = _read_sql("SELECT id FROM carteras WHERE nombre=?", [nombre.strip()])
         return int(df.iloc[0]["id"]) if not df.empty else -1
 
-def listar_carteras() -> pd.DataFrame:
+def listar_carteras(usuario_id: int = None) -> pd.DataFrame:
+    """
+    Lista carteras activas.
+    Si usuario_id es None → lista todas (modo sin auth).
+    Si usuario_id está definido → lista solo las del usuario.
+    """
+    if usuario_id is not None:
+        return _read_sql(
+            "SELECT * FROM carteras WHERE activa=1 AND usuario_id=? ORDER BY nombre",
+            [usuario_id]
+        )
     return _read_sql("SELECT * FROM carteras WHERE activa=1 ORDER BY nombre")
 
 def eliminar_cartera(cartera_id: int) -> None:

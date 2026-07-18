@@ -12,6 +12,19 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import cartera_db
 import core
 
+# Autenticación (opcional — si no está disponible, funciona sin login)
+try:
+    import auth as _auth
+    AUTH_OK = True
+except Exception:
+    AUTH_OK = False
+
+def _get_user_id() -> int | None:
+    """Retorna el ID del usuario logueado, o None si no hay auth."""
+    if AUTH_OK and _auth.esta_logueado():
+        return _auth.get_user_id()
+    return None
+
 BG_DARK      = "#0f1117"
 BG_CARD      = "#1e2130"
 COLOR_VERDE  = "#00c896"
@@ -85,7 +98,7 @@ def _grafico_costo_vs_valor(df_pnl: pd.DataFrame) -> go.Figure:
 
 def _selector_cartera() -> tuple[int | None, str]:
     """Retorna (cartera_id, nombre_cartera) seleccionada."""
-    df_carteras = cartera_db.listar_carteras()
+    df_carteras = cartera_db.listar_carteras(usuario_id=_get_user_id())
 
     if df_carteras.empty:
         return None, ""
@@ -110,7 +123,7 @@ def _selector_cartera() -> tuple[int | None, str]:
 def _tab_gestionar_carteras():
     st.markdown("### 🗂️ Mis carteras")
 
-    df_carteras = cartera_db.listar_carteras()
+    df_carteras = cartera_db.listar_carteras(usuario_id=_get_user_id())
 
     if not df_carteras.empty:
         for _, row in df_carteras.iterrows():
@@ -144,7 +157,7 @@ def _tab_gestionar_carteras():
         if st.form_submit_button("✅ Crear cartera", type="primary",
                                   use_container_width=True):
             if nombre.strip():
-                cid = cartera_db.crear_cartera(nombre, descripcion, moneda)
+                cid = cartera_db.crear_cartera(nombre, descripcion, moneda, usuario_id=_get_user_id())
                 if cid > 0:
                     st.success(f"✅ Cartera '{nombre}' creada.")
                     st.rerun()
@@ -538,7 +551,7 @@ def _tab_importar(cartera_id: int, nombre: str):
 def _tab_comparar(ccl: float):
     st.markdown("### 📊 Comparar carteras")
 
-    df_carteras = cartera_db.listar_carteras()
+    df_carteras = cartera_db.listar_carteras(usuario_id=_get_user_id())
     if df_carteras.empty or len(df_carteras) < 2:
         st.info("Necesitás al menos 2 carteras para comparar.")
         return
@@ -717,6 +730,41 @@ def _tab_renta_fija(cartera_id: int, nombre: str, ccl: float):
             use_container_width=True, hide_index=True
         )
     st.markdown("---")
+
+    # ── Editar instrumento ────────────────────────────────────────────────────
+    st.markdown("#### ✏️ Editar instrumento")
+    ticker_edit = st.selectbox("Seleccioná el ticker a editar",
+                                df_rf["ticker"].tolist(),
+                                key=f"edit_rf_sel_{cartera_id}")
+    row_edit = df_rf[df_rf["ticker"] == ticker_edit].iloc[0]
+    with st.form(f"form_edit_rf_{cartera_id}", clear_on_submit=False):
+        c1, c2 = st.columns(2)
+        nuevo_pct     = c1.number_input("Precio compra (%)", min_value=0.01, max_value=99999.0,
+                                         value=float(row_edit["precio_compra_pct"]), step=0.01)
+        nueva_tir     = c2.number_input("TIR de compra (%)", min_value=0.0,
+                                         value=float(row_edit["tir_compra"] or 0), step=0.01)
+        c3, c4 = st.columns(2)
+        nueva_fecha_c = c3.text_input("Fecha compra (YYYY-MM-DD)",
+                                       value=str(row_edit.get("fecha_compra", "")))
+        nueva_fecha_v = c4.text_input("Fecha vencimiento (YYYY-MM-DD)",
+                                       value=str(row_edit.get("fecha_vencimiento", "") or ""))
+        nuevo_vn      = st.number_input("Valor nominal", min_value=0.01,
+                                         value=float(row_edit["valor_nominal"]), step=1.0)
+        nuevas_notas  = st.text_input("Notas", value=str(row_edit.get("notas", "") or ""))
+        if st.form_submit_button("💾 Guardar cambios", type="primary", use_container_width=True):
+            cartera_db.agregar_renta_fija(
+                cartera_id, ticker_edit, str(row_edit["tipo"]),
+                nuevo_vn, nuevo_pct, str(row_edit["moneda"]),
+                nueva_fecha_c or str(row_edit["fecha_compra"]),
+                nueva_fecha_v or None,
+                nueva_tir if nueva_tir > 0 else None,
+                str(row_edit.get("nombre", ticker_edit)), nuevas_notas
+            )
+            st.success(f"✅ {ticker_edit} actualizado")
+            st.rerun()
+
+    st.markdown("---")
+    st.markdown("#### 🗑️ Eliminar instrumento")
     ticker_del = st.selectbox("Ticker a eliminar", df_rf["ticker"].tolist(),
                                key=f"del_rf_sel_{cartera_id}")
     if st.button(f"🗑️ Eliminar {ticker_del}", type="secondary", key=f"btn_del_rf_{cartera_id}"):
@@ -795,6 +843,41 @@ def _tab_fci(cartera_id: int, nombre: str, ccl: float):
             use_container_width=True, hide_index=True
         )
     st.markdown("---")
+    
+    # ── Editar FCI ────────────────────────────────────────────────────────────
+    st.markdown("#### ✏️ Editar FCI")
+    fondo_edit = st.selectbox("Seleccioná el fondo a editar",
+                               df_fci["nombre_fondo"].tolist(),
+                               key=f"edit_fci_sel_{cartera_id}")
+    row_fci = df_fci[df_fci["nombre_fondo"] == fondo_edit].iloc[0]
+    
+    with st.form(f"form_edit_fci_{cartera_id}", clear_on_submit=False):
+        c1, c2 = st.columns(2)
+        nuevas_cuotas = c1.number_input("Cuotapartes", min_value=0.0001,
+                                         value=float(row_fci["cuotapartes"]), step=0.01)
+        nuevo_vcp     = c2.number_input("Valor cuotaparte compra", min_value=0.0001,
+                                         value=float(row_fci["valor_cuotaparte"]),
+                                         step=0.0001, format="%.4f")
+        c3, c4 = st.columns(2)
+        nueva_fecha_fci = c3.text_input("Fecha suscripción (YYYY-MM-DD)",
+                                         value=str(row_fci.get("fecha_compra", "")))
+        nueva_gerenc    = c4.text_input("Gerenciadora",
+                                         value=str(row_fci.get("gerenciadora", "") or ""))
+        nuevas_notas_fci = st.text_input("Notas", value=str(row_fci.get("notas", "") or ""))
+        
+        if st.form_submit_button("💾 Guardar cambios FCI", type="primary", use_container_width=True):
+            cartera_db.agregar_fci(
+                cartera_id, fondo_edit, nuevas_cuotas, nuevo_vcp,
+                str(row_fci["moneda"]),
+                nueva_fecha_fci or str(row_fci["fecha_compra"]),
+                str(row_fci.get("tipo_fondo", "Money Market")),
+                nueva_gerenc or None,
+                nuevas_notas_fci
+            )
+            st.success(f"✅ {fondo_edit} actualizado")
+            st.rerun()
+
+    st.markdown("---")
     fondo_del = st.selectbox("Fondo a eliminar", df_fci["nombre_fondo"].tolist(),
                               key=f"del_fci_sel_{cartera_id}")
     if st.button(f"🗑️ Eliminar {fondo_del[:30]}", type="secondary", key=f"btn_del_fci_{cartera_id}"):
@@ -817,7 +900,7 @@ def render():
     # ── Sidebar ───────────────────────────────────────────────────────────────
     with st.sidebar:
         st.markdown("### 💼 Carteras")
-        df_carteras = cartera_db.listar_carteras()
+        df_carteras = cartera_db.listar_carteras(usuario_id=_get_user_id())
 
         if df_carteras.empty:
             st.warning("No tenés carteras. Creá una en la pestaña **Gestionar**.")
