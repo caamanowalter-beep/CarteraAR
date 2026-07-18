@@ -671,8 +671,8 @@ def _tab_renta_fija(cartera_id: int, nombre: str, ccl: float):
             c4, c5, c6 = st.columns(3)
             vn         = c4.number_input("Valor nominal", min_value=1.0, value=1000.0, step=100.0,
                                           help="Monto nominal en la moneda del instrumento")
-            pct_compra = c5.number_input("Precio compra (%)", min_value=0.1, value=85.0, step=0.1,
-                                          help="Precio en % del valor nominal (ej: 85.50)")
+            pct_compra = c5.number_input("Precio compra (%)", min_value=0.01, max_value=99999.0, value=85.0, step=0.01,
+                                          help="Precio en % del VN. Bonos USD: ej 84.10. Bonos ARS/CER: puede ser >100, ej 1272.50")
             tir        = c6.number_input("TIR de compra (%)", min_value=0.0, value=0.0, step=0.1)
             c7, c8 = st.columns(2)
             fecha_compra = c7.date_input("Fecha de compra", value=date.today())
