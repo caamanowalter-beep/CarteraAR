@@ -233,8 +233,9 @@ def listar_carteras(usuario_id: int = None) -> pd.DataFrame:
                 [usuario_id]
             )
         except Exception:
-            # Columna usuario_id no existe aún → devolver todas como fallback
-            pass
+            # Columna usuario_id no existe aún → devolver todas como fallback temporal
+            return _read_sql("SELECT * FROM carteras WHERE activa=1 ORDER BY nombre")
+    # Sin usuario_id → modo sin auth, mostrar todas
     return _read_sql("SELECT * FROM carteras WHERE activa=1 ORDER BY nombre")
 
 def eliminar_cartera(cartera_id: int) -> None:
