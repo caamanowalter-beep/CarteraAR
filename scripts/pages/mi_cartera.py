@@ -12,19 +12,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import cartera_db
 import core
 
-# Autenticación (opcional — si no está disponible, funciona sin login)
-try:
-    import auth as _auth
-    AUTH_OK = True
-except Exception:
-    AUTH_OK = False
-
-def _get_user_id() -> int | None:
-    """Retorna el ID del usuario logueado, o None si no hay auth."""
-    if AUTH_OK and _auth.esta_logueado():
-        return _auth.get_user_id()
-    return None
-
 BG_DARK      = "#0f1117"
 BG_CARD      = "#1e2130"
 COLOR_VERDE  = "#00c896"
@@ -98,7 +85,7 @@ def _grafico_costo_vs_valor(df_pnl: pd.DataFrame) -> go.Figure:
 
 def _selector_cartera() -> tuple[int | None, str]:
     """Retorna (cartera_id, nombre_cartera) seleccionada."""
-    df_carteras = cartera_db.listar_carteras(usuario_id=_get_user_id())
+    df_carteras = cartera_db.listar_carteras()
 
     if df_carteras.empty:
         return None, ""
@@ -123,7 +110,7 @@ def _selector_cartera() -> tuple[int | None, str]:
 def _tab_gestionar_carteras():
     st.markdown("### 🗂️ Mis carteras")
 
-    df_carteras = cartera_db.listar_carteras(usuario_id=_get_user_id())
+    df_carteras = cartera_db.listar_carteras()
 
     if not df_carteras.empty:
         for _, row in df_carteras.iterrows():
@@ -157,7 +144,7 @@ def _tab_gestionar_carteras():
         if st.form_submit_button("✅ Crear cartera", type="primary",
                                   use_container_width=True):
             if nombre.strip():
-                cid = cartera_db.crear_cartera(nombre, descripcion, moneda, usuario_id=_get_user_id())
+                cid = cartera_db.crear_cartera(nombre, descripcion, moneda)
                 if cid > 0:
                     st.success(f"✅ Cartera '{nombre}' creada.")
                     st.rerun()
@@ -551,7 +538,7 @@ def _tab_importar(cartera_id: int, nombre: str):
 def _tab_comparar(ccl: float):
     st.markdown("### 📊 Comparar carteras")
 
-    df_carteras = cartera_db.listar_carteras(usuario_id=_get_user_id())
+    df_carteras = cartera_db.listar_carteras()
     if df_carteras.empty or len(df_carteras) < 2:
         st.info("Necesitás al menos 2 carteras para comparar.")
         return
@@ -900,7 +887,7 @@ def render():
     # ── Sidebar ───────────────────────────────────────────────────────────────
     with st.sidebar:
         st.markdown("### 💼 Carteras")
-        df_carteras = cartera_db.listar_carteras(usuario_id=_get_user_id())
+        df_carteras = cartera_db.listar_carteras()
 
         if df_carteras.empty:
             st.warning("No tenés carteras. Creá una en la pestaña **Gestionar**.")
