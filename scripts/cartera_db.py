@@ -188,6 +188,34 @@ def init_db() -> None:
         UNIQUE(cartera_id, nombre_fondo)
     )""")
 
+    # ── Dividendos cobrados ────────────────────────────────────────────────────
+    cur.execute(f"""CREATE TABLE IF NOT EXISTS dividendos (
+        id              {pk} PRIMARY KEY {ai},
+        cartera_id      INTEGER NOT NULL,
+        ticker          TEXT    NOT NULL,
+        fecha_cobro     TEXT    NOT NULL,
+        monto           REAL    NOT NULL,
+        moneda          TEXT    NOT NULL DEFAULT 'USD',
+        tipo_cambio     TEXT    NOT NULL DEFAULT 'CCL',
+        monto_ars       REAL,
+        monto_usd       REAL,
+        reinvertido     INTEGER NOT NULL DEFAULT 0,
+        notas           TEXT
+    )""")
+
+    # ── Saldo disponible (efectivo sin invertir) ───────────────────────────────
+    cur.execute(f"""CREATE TABLE IF NOT EXISTS saldo_disponible (
+        id          {pk} PRIMARY KEY {ai},
+        cartera_id  INTEGER NOT NULL,
+        fecha       TEXT    NOT NULL,
+        concepto    TEXT    NOT NULL,
+        monto       REAL    NOT NULL,
+        moneda      TEXT    NOT NULL DEFAULT 'USD',
+        tipo_cambio TEXT    DEFAULT 'CCL',
+        monto_usd   REAL,
+        tipo        TEXT    NOT NULL DEFAULT 'INGRESO'
+    )""")
+
     con.commit()
     con.close()
 
@@ -599,13 +627,7 @@ def listar_alertas(cartera_id: int) -> pd.DataFrame:
 def desactivar_alerta(alerta_id: int) -> None:
     _execute("UPDATE alertas SET activa=0 WHERE id=?", (alerta_id,))
 
-def generar_template_csv() -> str:
-    return (
-        "ticker,cantidad,precio_promedio,moneda,fecha_referencia,notas\n"
-        "AAPL,50,185.00,USD,2024-01-01,Posición largo plazo\n"
-        "MELI,10,1450.00,USD,2024-01-01,\n"
-        "YPFD,200,15000.00,ARS,2024-01-01,CEDEAR\n"
-    )
+# generar_template_csv → ver versión mejorada al final del archivo
 
 # Auto-inicializar DB al importar
 init_db()
@@ -869,3 +891,169 @@ def resumen_cartera_completo(cartera_id: int, ccl: float = 1200.0) -> dict:
         "FCIs":                 len(df_fci),
         "Total instrumentos":   res_acc.get("Posiciones", 0) + len(df_rf) + len(df_fci),
     }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DIVIDENDOS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+TIPOS_CAMBIO_DIV = ["CCL", "MEP", "Oficial", "ARS", "USD directo"]
+
+def registrar_dividendo(cartera_id: int, ticker: str, fecha_cobro: str,
+                         monto: float, moneda: str = "USD",
+                         tipo_cambio: str = "CCL", ccl: float = 1200.0,
+                         reinvertido: bool = False, notas: str = "") -> None:
+    """
+    Registra un dividendo cobrado.
+    moneda: USD | ARS
+    tipo_cambio: CCL | MEP | Oficial | ARS | USD directo
+    El monto se convierte automáticamente a USD y ARS para comparación.
+    """
+    if fecha_cobro is None:
+        fecha_cobro = date.today().strftime("%Y-%m-%d")
+
+    # Calcular equivalencias
+    if moneda == "USD":
+        monto_usd = monto
+        monto_ars = monto * ccl
+    else:  # ARS
+        monto_ars = monto
+        monto_usd = monto / ccl if ccl > 0 else None
+
+    _execute("""
+        INSERT INTO dividendos
+            (cartera_id, ticker, fecha_cobro, monto, moneda, tipo_cambio,
+             monto_ars, monto_usd, reinvertido, notas)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (cartera_id, ticker.upper(), fecha_cobro, monto, moneda.upper(),
+          tipo_cambio, monto_ars, monto_usd, int(reinvertido), notas))
+
+    # Si no se reinvierte → agregar al saldo disponible
+    if not reinvertido:
+        registrar_saldo(
+            cartera_id=cartera_id,
+            concepto=f"Dividendo {ticker.upper()}",
+            monto=monto,
+            moneda=moneda,
+            tipo_cambio=tipo_cambio,
+            ccl=ccl,
+            tipo="DIVIDENDO"
+        )
+
+def listar_dividendos(cartera_id: int) -> pd.DataFrame:
+    return _read_sql(
+        "SELECT * FROM dividendos WHERE cartera_id=? ORDER BY fecha_cobro DESC",
+        [cartera_id]
+    )
+
+def resumen_dividendos(cartera_id: int) -> dict:
+    df = listar_dividendos(cartera_id)
+    if df.empty:
+        return {"total_usd": 0, "total_ars": 0, "cobros": 0, "reinvertidos": 0}
+    return {
+        "total_usd":    round(df["monto_usd"].dropna().sum(), 2),
+        "total_ars":    round(df["monto_ars"].dropna().sum(), 2),
+        "cobros":       len(df),
+        "reinvertidos": int(df["reinvertido"].sum()),
+        "por_ticker":   df.groupby("ticker")["monto_usd"].sum().round(2).to_dict(),
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SALDO DISPONIBLE (efectivo sin invertir)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+TIPOS_MOVIMIENTO_SALDO = ["INGRESO", "DIVIDENDO", "VENTA", "RETIRO", "COMPRA", "COMISION"]
+
+def registrar_saldo(cartera_id: int, concepto: str, monto: float,
+                     moneda: str = "USD", tipo_cambio: str = "CCL",
+                     ccl: float = 1200.0, tipo: str = "INGRESO",
+                     fecha: str = None) -> None:
+    """
+    Registra un movimiento de saldo disponible.
+    tipo: INGRESO | DIVIDENDO | VENTA | RETIRO | COMPRA | COMISION
+    Los tipos RETIRO, COMPRA, COMISION se registran como negativos.
+    """
+    if fecha is None:
+        fecha = date.today().strftime("%Y-%m-%d")
+
+    # Calcular USD
+    if moneda == "USD":
+        monto_usd = monto
+    else:
+        monto_usd = monto / ccl if ccl > 0 else None
+
+    _execute("""
+        INSERT INTO saldo_disponible
+            (cartera_id, fecha, concepto, monto, moneda, tipo_cambio, monto_usd, tipo)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (cartera_id, fecha, concepto.strip(), monto, moneda.upper(),
+          tipo_cambio, monto_usd, tipo.upper()))
+
+def listar_saldo(cartera_id: int) -> pd.DataFrame:
+    return _read_sql(
+        "SELECT * FROM saldo_disponible WHERE cartera_id=? ORDER BY fecha DESC",
+        [cartera_id]
+    )
+
+def saldo_actual(cartera_id: int) -> dict:
+    """
+    Calcula el saldo disponible actual por moneda.
+    INGRESO/DIVIDENDO/VENTA suman, RETIRO/COMPRA/COMISION restan.
+    """
+    df = listar_saldo(cartera_id)
+    if df.empty:
+        return {"usd": 0.0, "ars": 0.0, "movimientos": 0}
+
+    tipos_positivos = {"INGRESO", "DIVIDENDO", "VENTA"}
+    tipos_negativos = {"RETIRO", "COMPRA", "COMISION"}
+
+    saldo_usd = 0.0
+    saldo_ars = 0.0
+
+    for _, row in df.iterrows():
+        monto    = float(row["monto"])
+        moneda   = str(row["moneda"])
+        monto_usd = float(row["monto_usd"]) if row["monto_usd"] else 0
+        tipo     = str(row["tipo"]).upper()
+        signo    = 1 if tipo in tipos_positivos else -1
+
+        if moneda == "USD":
+            saldo_usd += signo * monto
+        else:
+            saldo_ars += signo * monto
+
+    return {
+        "usd":         round(saldo_usd, 2),
+        "ars":         round(saldo_ars, 2),
+        "movimientos": len(df),
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TEMPLATE CSV MEJORADO
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def generar_template_csv() -> str:
+    """Template CSV mejorado con todos los campos y ejemplos reales."""
+    return (
+        "ticker,tipo_activo,cantidad,precio_promedio,moneda,es_cedear,fecha_referencia,notas\n"
+        "AAPL,ACCION,50,185.00,USD,0,2024-01-01,Posicion largo plazo\n"
+        "MELI,CEDEAR,10,1450.00,ARS,1,2024-01-01,CEDEAR MercadoLibre en BYMA\n"
+        "YPFD,CEDEAR,200,15000.00,ARS,1,2024-01-01,CEDEAR YPF en BYMA\n"
+        "MSFT,ACCION,5,380.00,USD,0,2024-06-15,Compra junio 2024\n"
+        "SPY,ETF,3,520.00,USD,0,2024-03-01,ETF S&P500\n"
+        "AMZND,CEDEAR,33,2619.55,ARS,1,2024-01-01,CEDEAR Amazon en BYMA\n"
+        "GOOGL,ACCION,2,175.00,USD,0,2024-09-01,Alphabet clase A\n"
+        "AL30,BONO,1000,84.10,USD,0,2024-01-01,Bono soberano USD Ley NY 2030\n"
+    )
+
+def generar_template_dividendos_csv() -> str:
+    """Template CSV para importar dividendos históricos."""
+    return (
+        "ticker,fecha_cobro,monto,moneda,tipo_cambio,reinvertido,notas\n"
+        "AAPL,2024-02-15,45.50,USD,CCL,0,Dividendo Q1 2024\n"
+        "MSFT,2024-03-20,28.00,USD,MEP,0,Dividendo trimestral\n"
+        "YPFD,2024-04-10,15000.00,ARS,ARS,0,Dividendo en pesos\n"
+        "AL30,2024-07-09,35.00,USD,CCL,1,Cupon reinvertido\n"
+    )

@@ -872,6 +872,177 @@ def _tab_fci(cartera_id: int, nombre: str, ccl: float):
         st.warning(f"🗑️ {fondo_del} eliminado")
         st.rerun()
 
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TAB: DIVIDENDOS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _tab_dividendos(cartera_id: int, nombre: str, ccl: float):
+    st.markdown(f"### 💰 Dividendos cobrados en **{nombre}**")
+    st.info(
+        "Registrá los dividendos cobrados. Podés indicar si se cobró en "
+        "**dólar MEP**, **CCL**, **pesos ARS** o **USD directo**. "
+        "Los dividendos no reinvertidos se suman automáticamente al saldo disponible."
+    )
+
+    with st.expander("➕ Registrar dividendo", expanded=True):
+        with st.form(f"form_div_{cartera_id}", clear_on_submit=True):
+            c1, c2, c3 = st.columns(3)
+            ticker      = c1.text_input("Ticker", placeholder="ej: AAPL, AL30").upper().strip()
+            fecha_cobro = c2.date_input("Fecha de cobro", value=date.today())
+            tipo_cambio = c3.selectbox("Tipo de cambio", cartera_db.TIPOS_CAMBIO_DIV)
+
+            c4, c5, c6 = st.columns(3)
+            monto       = c4.number_input("Monto cobrado", min_value=0.01, value=100.0, step=0.01)
+            moneda      = c5.selectbox("Moneda", ["USD", "ARS"])
+            reinvertido = c6.checkbox("¿Reinvertido?",
+                                       help="Si está tildado, NO se suma al saldo disponible")
+            notas = st.text_input("Notas (opcional)", placeholder="ej: Dividendo Q1 2024")
+
+            if st.form_submit_button("✅ Registrar dividendo", type="primary", use_container_width=True):
+                if not ticker:
+                    st.error("❌ Ingresá un ticker válido.")
+                else:
+                    cartera_db.registrar_dividendo(
+                        cartera_id, ticker, str(fecha_cobro),
+                        monto, moneda, tipo_cambio, ccl, reinvertido, notas
+                    )
+                    equiv = f"≈ ${monto * ccl:,.0f} ARS" if moneda == "USD" else f"≈ ${monto/ccl:,.2f} USD"
+                    st.success(
+                        f"✅ Dividendo {ticker}: ${monto:,.2f} {moneda} ({tipo_cambio}) {equiv}"
+                        + (" — Reinvertido" if reinvertido else " — Sumado al saldo disponible")
+                    )
+                    st.rerun()
+
+    # Tabla de dividendos
+    df_div = cartera_db.listar_dividendos(cartera_id)
+    if df_div.empty:
+        st.info("Sin dividendos registrados.")
+        return
+
+    st.markdown("---")
+    res_div = cartera_db.resumen_dividendos(cartera_id)
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("💰 Total cobrado (USD)", f"${res_div['total_usd']:,.2f}")
+    c2.metric("💰 Total cobrado (ARS)", f"${res_div['total_ars']:,.0f}")
+    c3.metric("📊 Cobros registrados", res_div["cobros"])
+    c4.metric("🔄 Reinvertidos", res_div["reinvertidos"])
+
+    st.markdown("#### 📋 Historial de dividendos")
+    cols_show = [c for c in ["ticker","fecha_cobro","monto","moneda","tipo_cambio",
+                              "monto_usd","monto_ars","reinvertido","notas"]
+                 if c in df_div.columns]
+    st.dataframe(
+        df_div[cols_show].style.format({
+            "monto":     "${:,.2f}",
+            "monto_usd": lambda v: f"${v:,.2f}" if v else "—",
+            "monto_ars": lambda v: f"${v:,.0f}" if v else "—",
+            "reinvertido": lambda v: "✅ Sí" if v else "❌ No",
+        }),
+        use_container_width=True, hide_index=True
+    )
+
+    # Por ticker
+    if res_div.get("por_ticker"):
+        st.markdown("#### 📊 Dividendos por ticker (USD)")
+        df_tick = pd.DataFrame(list(res_div["por_ticker"].items()),
+                               columns=["Ticker", "Total USD"])
+        df_tick = df_tick.sort_values("Total USD", ascending=False)
+        st.dataframe(df_tick.style.format({"Total USD": "${:,.2f}"}),
+                     use_container_width=True, hide_index=True)
+
+    # Template para importar
+    st.markdown("---")
+    st.download_button(
+        "⬇️ Descargar template dividendos CSV",
+        data=cartera_db.generar_template_dividendos_csv(),
+        file_name="template_dividendos.csv",
+        mime="text/csv"
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TAB: SALDO DISPONIBLE
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _tab_saldo_disponible(cartera_id: int, nombre: str, ccl: float):
+    st.markdown(f"### 💵 Saldo disponible en **{nombre}**")
+    st.info(
+        "Registrá el efectivo disponible para invertir. "
+        "Los dividendos no reinvertidos se agregan automáticamente. "
+        "Podés registrar ingresos, retiros y otros movimientos."
+    )
+
+    # Saldo actual
+    saldo = cartera_db.saldo_actual(cartera_id)
+    c1, c2, c3 = st.columns(3)
+    saldo_color = "#00c896" if saldo["usd"] >= 0 else "#f74f4f"
+    c1.markdown(
+        f'<div style="background:#1e2130;padding:12px;border-radius:8px;'
+        f'border-left:3px solid {saldo_color}">'
+        f'<div style="color:#aaa;font-size:11px">Saldo USD</div>'
+        f'<div style="color:{saldo_color};font-size:22px;font-weight:700">'
+        f'${saldo["usd"]:,.2f}</div></div>',
+        unsafe_allow_html=True
+    )
+    ars_color = "#00c896" if saldo["ars"] >= 0 else "#f74f4f"
+    c2.markdown(
+        f'<div style="background:#1e2130;padding:12px;border-radius:8px;'
+        f'border-left:3px solid {ars_color}">'
+        f'<div style="color:#aaa;font-size:11px">Saldo ARS</div>'
+        f'<div style="color:{ars_color};font-size:22px;font-weight:700">'
+        f'${saldo["ars"]:,.0f}</div></div>',
+        unsafe_allow_html=True
+    )
+    c3.metric("📝 Movimientos", saldo["movimientos"])
+
+    st.markdown("")
+
+    with st.expander("➕ Registrar movimiento de saldo", expanded=False):
+        with st.form(f"form_saldo_{cartera_id}", clear_on_submit=True):
+            c1, c2 = st.columns(2)
+            tipo_mov    = c1.selectbox("Tipo", cartera_db.TIPOS_MOVIMIENTO_SALDO)
+            fecha_mov   = c2.date_input("Fecha", value=date.today())
+            concepto    = st.text_input("Concepto", placeholder="ej: Ingreso de capital, Retiro parcial")
+            c3, c4, c5 = st.columns(3)
+            monto_mov   = c3.number_input("Monto", min_value=0.01, value=1000.0, step=1.0)
+            moneda_mov  = c4.selectbox("Moneda", ["USD", "ARS"])
+            tc_mov      = c5.selectbox("Tipo de cambio", ["CCL", "MEP", "Oficial", "ARS", "USD directo"])
+
+            if st.form_submit_button("✅ Registrar", type="primary", use_container_width=True):
+                if not concepto.strip():
+                    st.error("❌ Ingresá un concepto.")
+                else:
+                    cartera_db.registrar_saldo(
+                        cartera_id, concepto, monto_mov,
+                        moneda_mov, tc_mov, ccl, tipo_mov, str(fecha_mov)
+                    )
+                    st.success(f"✅ {tipo_mov}: ${monto_mov:,.2f} {moneda_mov} registrado")
+                    st.rerun()
+
+    # Historial
+    df_saldo = cartera_db.listar_saldo(cartera_id)
+    if not df_saldo.empty:
+        st.markdown("---")
+        st.markdown("#### 📋 Historial de movimientos")
+
+        def color_tipo_saldo(val):
+            positivos = {"INGRESO", "DIVIDENDO", "VENTA"}
+            return "color: #00c896" if str(val).upper() in positivos else "color: #f74f4f"
+
+        cols_s = [c for c in ["fecha","tipo","concepto","monto","moneda",
+                               "tipo_cambio","monto_usd"] if c in df_saldo.columns]
+        st.dataframe(
+            df_saldo[cols_s].style
+                .map(color_tipo_saldo, subset=["tipo"])
+                .format({
+                    "monto":     "${:,.2f}",
+                    "monto_usd": lambda v: f"${v:,.2f}" if v else "—",
+                }),
+            use_container_width=True, hide_index=True
+        )
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # RENDER PRINCIPAL
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -900,12 +1071,14 @@ def render():
         st.caption(f"{len(df_carteras)} cartera(s) activa(s)")
 
     # ── Tabs principales ──────────────────────────────────────────────────────
-    tab_gest, tab_res, tab_add, tab_rf, tab_fci, tab_mov, tab_imp, tab_comp, tab_alert = st.tabs([
+    tab_gest, tab_res, tab_add, tab_rf, tab_fci, tab_div, tab_saldo, tab_mov, tab_imp, tab_comp, tab_alert = st.tabs([
         "🗂️ Gestionar",
         "📊 Resumen P&L",
         "➕ Acciones/CEDEARs",
         "🏦 Renta Fija",
         "📈 FCI",
+        "💰 Dividendos",
+        "💵 Saldo disponible",
         "📝 Movimientos",
         "📥 Importar CSV",
         "📈 Comparar carteras",
@@ -916,7 +1089,7 @@ def render():
         _tab_gestionar_carteras()
 
     if cartera_id is None:
-        for tab in [tab_res, tab_add, tab_rf, tab_fci, tab_mov, tab_imp, tab_alert]:
+        for tab in [tab_res, tab_add, tab_rf, tab_fci, tab_div, tab_saldo, tab_mov, tab_imp, tab_alert]:
             with tab:
                 st.info("👈 Primero creá una cartera en la pestaña **Gestionar**.")
         with tab_comp:
@@ -934,6 +1107,12 @@ def render():
 
     with tab_fci:
         _tab_fci(cartera_id, nombre_cartera, ccl)
+
+    with tab_div:
+        _tab_dividendos(cartera_id, nombre_cartera, ccl)
+
+    with tab_saldo:
+        _tab_saldo_disponible(cartera_id, nombre_cartera, ccl)
 
     with tab_mov:
         _tab_movimientos(cartera_id, nombre_cartera)
