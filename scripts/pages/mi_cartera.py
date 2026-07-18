@@ -650,6 +650,158 @@ def _tab_alertas(cartera_id: int, nombre: str):
             cartera_db.desactivar_alerta(row["id"])
             st.rerun()
 
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TAB: RENTA FIJA (Bonos, LECAPs, ONs)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _tab_renta_fija(cartera_id: int, nombre: str, ccl: float):
+    st.markdown(f"### 🏦 Renta Fija en **{nombre}**")
+    st.info(
+        "Registrá bonos soberanos (AL30, GD30), LECAPs, LETEs y "
+        "Obligaciones Negociables (ONs). El precio se expresa en **% del valor nominal**."
+    )
+    with st.expander("➕ Agregar instrumento de renta fija", expanded=True):
+        with st.form(f"form_rf_{cartera_id}", clear_on_submit=True):
+            c1, c2, c3 = st.columns(3)
+            ticker = c1.text_input("Ticker", placeholder="ej: AL30, GD30, YCA6O").upper().strip()
+            tipo   = c2.selectbox("Tipo", cartera_db.TIPOS_RENTA_FIJA)
+            moneda = c3.selectbox("Moneda", ["USD", "ARS"])
+            c4, c5, c6 = st.columns(3)
+            vn         = c4.number_input("Valor nominal", min_value=1.0, value=1000.0, step=100.0,
+                                          help="Monto nominal en la moneda del instrumento")
+            pct_compra = c5.number_input("Precio compra (%)", min_value=0.1, value=85.0, step=0.1,
+                                          help="Precio en % del valor nominal (ej: 85.50)")
+            tir        = c6.number_input("TIR de compra (%)", min_value=0.0, value=0.0, step=0.1)
+            c7, c8 = st.columns(2)
+            fecha_compra = c7.date_input("Fecha de compra", value=date.today())
+            fecha_venc   = c8.text_input("Fecha vencimiento", placeholder="ej: 2030-07-09")
+            nombre_inst  = st.text_input("Nombre (opcional)", placeholder="ej: Bono Soberano USD Ley Arg 2030")
+            notas        = st.text_input("Notas (opcional)")
+            if st.form_submit_button("✅ Agregar instrumento", type="primary", use_container_width=True):
+                if not ticker:
+                    st.error("❌ Ingresá un ticker válido.")
+                else:
+                    cartera_db.agregar_renta_fija(
+                        cartera_id, ticker, tipo, vn, pct_compra, moneda,
+                        str(fecha_compra), fecha_venc or None,
+                        tir if tir > 0 else None, nombre_inst or None, notas
+                    )
+                    st.success(f"✅ {ticker} ({tipo}) — VN: {vn:,.0f} {moneda} @ {pct_compra:.2f}%")
+                    st.rerun()
+
+    df_rf = cartera_db.listar_renta_fija(cartera_id)
+    if df_rf.empty:
+        st.info("Sin instrumentos de renta fija en esta cartera.")
+        return
+
+    st.markdown("---")
+    df_pnl_rf = cartera_db.calcular_pnl_renta_fija(cartera_id, ccl)
+    if not df_pnl_rf.empty:
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("💰 Valor actual (USD)", f"${df_pnl_rf['Valor actual (USD)'].sum():,.2f}")
+        c2.metric("📥 Costo total (USD)",  f"${df_pnl_rf['Costo (USD)'].sum():,.2f}")
+        c3.metric("📈 Ganancia (USD)", f"${df_pnl_rf['Ganancia (USD)'].sum():+,.2f}")
+        c4.metric("📊 Instrumentos", len(df_pnl_rf))
+        st.dataframe(
+            df_pnl_rf.style
+                .map(_color_ganancia, subset=["Ganancia (USD)", "Ganancia (%)"])
+                .format({
+                    "Valor nominal": "${:,.2f}", "Precio compra %": "{:.2f}%",
+                    "Precio actual %": "{:.2f}%", "Costo (USD)": "${:,.2f}",
+                    "Valor actual (USD)": "${:,.2f}", "Ganancia (USD)": "${:+,.2f}",
+                    "Ganancia (%)": "{:+.2f}%", "Ganancia (ARS)": "${:+,.0f}",
+                    "TIR compra": lambda v: f"{v:.2f}%" if v else "—",
+                }),
+            use_container_width=True, hide_index=True
+        )
+    st.markdown("---")
+    ticker_del = st.selectbox("Ticker a eliminar", df_rf["ticker"].tolist(),
+                               key=f"del_rf_sel_{cartera_id}")
+    if st.button(f"🗑️ Eliminar {ticker_del}", type="secondary", key=f"btn_del_rf_{cartera_id}"):
+        cartera_db.eliminar_renta_fija(cartera_id, ticker_del)
+        st.warning(f"🗑️ {ticker_del} eliminado")
+        st.rerun()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TAB: FCI — Fondos Comunes de Inversión
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _tab_fci(cartera_id: int, nombre: str, ccl: float):
+    st.markdown(f"### 📈 Fondos Comunes de Inversión en **{nombre}**")
+    st.info("Registrá tus FCIs con el valor de cuotaparte al momento de la suscripción.")
+
+    with st.expander("➕ Agregar FCI", expanded=True):
+        with st.form(f"form_fci_{cartera_id}", clear_on_submit=True):
+            c1, c2 = st.columns(2)
+            nombre_fondo = c1.text_input("Nombre del fondo", placeholder="ej: Fondo Galileo Delta")
+            gerenciadora = c2.text_input("Gerenciadora", placeholder="ej: Galileo, Balanz, Allaria")
+            c3, c4, c5 = st.columns(3)
+            tipo_fondo       = c3.selectbox("Tipo de fondo", cartera_db.TIPOS_FCI)
+            moneda           = c4.selectbox("Moneda", ["ARS", "USD"])
+            fecha_compra     = c5.date_input("Fecha suscripción", value=date.today())
+            c6, c7 = st.columns(2)
+            cuotapartes      = c6.number_input("Cuotapartes", min_value=0.0001, value=1000.0, step=0.01)
+            valor_cuotaparte = c7.number_input("Valor cuotaparte (compra)", min_value=0.0001,
+                                                value=1.0, step=0.0001, format="%.4f")
+            notas = st.text_input("Notas (opcional)")
+            if st.form_submit_button("✅ Agregar FCI", type="primary", use_container_width=True):
+                if not nombre_fondo.strip():
+                    st.error("❌ Ingresá el nombre del fondo.")
+                else:
+                    cartera_db.agregar_fci(
+                        cartera_id, nombre_fondo, cuotapartes, valor_cuotaparte,
+                        moneda, str(fecha_compra), tipo_fondo, gerenciadora, notas
+                    )
+                    st.success(f"✅ {nombre_fondo} — {cuotapartes:,.2f} cuotapartes @ ${valor_cuotaparte:.4f}")
+                    st.rerun()
+
+    df_fci = cartera_db.listar_fci(cartera_id)
+    if df_fci.empty:
+        st.info("Sin FCIs en esta cartera.")
+        return
+
+    st.markdown("---")
+    st.markdown("#### 💹 Actualizar valor cuotaparte actual")
+    valores_actuales = {}
+    cols_vcp = st.columns(min(len(df_fci), 3))
+    for i, (_, row) in enumerate(df_fci.iterrows()):
+        with cols_vcp[i % 3]:
+            vcp = st.number_input(
+                f"{row['nombre_fondo'][:25]}",
+                min_value=0.0001, value=float(row['valor_cuotaparte']),
+                step=0.0001, format="%.4f", key=f"vcp_{cartera_id}_{i}"
+            )
+            valores_actuales[row['nombre_fondo']] = vcp
+
+    df_pnl_fci = cartera_db.calcular_pnl_fci(cartera_id, ccl, valores_actuales)
+    if not df_pnl_fci.empty:
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("💰 Valor actual (USD)", f"${df_pnl_fci['Valor actual (USD)'].sum():,.2f}")
+        c2.metric("📥 Costo total (USD)",  f"${df_pnl_fci['Costo (USD)'].sum():,.2f}")
+        c3.metric("📈 Ganancia (USD)", f"${df_pnl_fci['Ganancia (USD)'].sum():+,.2f}")
+        c4.metric("📊 Fondos", len(df_pnl_fci))
+        st.dataframe(
+            df_pnl_fci.style
+                .map(_color_ganancia, subset=["Ganancia (USD)", "Ganancia (%)"])
+                .format({
+                    "Cuotapartes": "{:,.2f}", "VCP compra": "${:.4f}", "VCP actual": "${:.4f}",
+                    "Costo (USD)": "${:,.2f}", "Valor actual (USD)": "${:,.2f}",
+                    "Ganancia (USD)": "${:+,.2f}", "Ganancia (%)": "{:+.2f}%",
+                    "Ganancia (ARS)": "${:+,.0f}",
+                }),
+            use_container_width=True, hide_index=True
+        )
+    st.markdown("---")
+    fondo_del = st.selectbox("Fondo a eliminar", df_fci["nombre_fondo"].tolist(),
+                              key=f"del_fci_sel_{cartera_id}")
+    if st.button(f"🗑️ Eliminar {fondo_del[:30]}", type="secondary", key=f"btn_del_fci_{cartera_id}"):
+        cartera_db.eliminar_fci(cartera_id, fondo_del)
+        st.warning(f"🗑️ {fondo_del} eliminado")
+        st.rerun()
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # RENDER PRINCIPAL
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -678,10 +830,12 @@ def render():
         st.caption(f"{len(df_carteras)} cartera(s) activa(s)")
 
     # ── Tabs principales ──────────────────────────────────────────────────────
-    tab_gest, tab_res, tab_add, tab_mov, tab_imp, tab_comp, tab_alert = st.tabs([
+    tab_gest, tab_res, tab_add, tab_rf, tab_fci, tab_mov, tab_imp, tab_comp, tab_alert = st.tabs([
         "🗂️ Gestionar",
         "📊 Resumen P&L",
-        "➕ Agregar posición",
+        "➕ Acciones/CEDEARs",
+        "🏦 Renta Fija",
+        "📈 FCI",
         "📝 Movimientos",
         "📥 Importar CSV",
         "📈 Comparar carteras",
@@ -692,7 +846,7 @@ def render():
         _tab_gestionar_carteras()
 
     if cartera_id is None:
-        for tab in [tab_res, tab_add, tab_mov, tab_imp, tab_alert]:
+        for tab in [tab_res, tab_add, tab_rf, tab_fci, tab_mov, tab_imp, tab_alert]:
             with tab:
                 st.info("👈 Primero creá una cartera en la pestaña **Gestionar**.")
         with tab_comp:
@@ -704,6 +858,12 @@ def render():
 
     with tab_add:
         _tab_agregar_posicion(cartera_id, nombre_cartera)
+
+    with tab_rf:
+        _tab_renta_fija(cartera_id, nombre_cartera, ccl)
+
+    with tab_fci:
+        _tab_fci(cartera_id, nombre_cartera, ccl)
 
     with tab_mov:
         _tab_movimientos(cartera_id, nombre_cartera)

@@ -156,6 +156,38 @@ def init_db() -> None:
     ]
     for sql in tablas:
         cur.execute(sql)
+    # ── Renta fija (Bonos, LECAPs, ONs) ──────────────────────────────────────
+    cur.execute(f"""CREATE TABLE IF NOT EXISTS renta_fija (
+        id                {pk} PRIMARY KEY {ai},
+        cartera_id        INTEGER NOT NULL,
+        ticker            TEXT    NOT NULL,
+        tipo              TEXT    NOT NULL DEFAULT 'BONO',
+        nombre            TEXT,
+        valor_nominal     REAL    NOT NULL,
+        precio_compra_pct REAL    NOT NULL,
+        moneda            TEXT    NOT NULL DEFAULT 'USD',
+        fecha_compra      TEXT    NOT NULL,
+        fecha_vencimiento TEXT,
+        tir_compra        REAL,
+        notas             TEXT,
+        UNIQUE(cartera_id, ticker)
+    )""")
+
+    # ── FCIs ──────────────────────────────────────────────────────────────────
+    cur.execute(f"""CREATE TABLE IF NOT EXISTS fci (
+        id               {pk} PRIMARY KEY {ai},
+        cartera_id       INTEGER NOT NULL,
+        nombre_fondo     TEXT    NOT NULL,
+        gerenciadora     TEXT,
+        cuotapartes      REAL    NOT NULL,
+        valor_cuotaparte REAL    NOT NULL,
+        moneda           TEXT    NOT NULL DEFAULT 'ARS',
+        fecha_compra     TEXT    NOT NULL,
+        tipo_fondo       TEXT    DEFAULT 'Money Market',
+        notas            TEXT,
+        UNIQUE(cartera_id, nombre_fondo)
+    )""")
+
     con.commit()
     con.close()
 
@@ -550,3 +582,263 @@ def generar_template_csv() -> str:
 
 # Auto-inicializar DB al importar
 init_db()
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# RENTA FIJA — Bonos, LECAPs, ONs
+# ═══════════════════════════════════════════════════════════════════════════════
+
+TIPOS_RENTA_FIJA = ["BONO USD", "BONO ARS", "LECAP", "LETES", "ON USD", "ON ARS", "CER", "DUAL"]
+
+def agregar_renta_fija(cartera_id: int, ticker: str, tipo: str,
+                        valor_nominal: float, precio_compra_pct: float,
+                        moneda: str = "USD", fecha_compra: str = None,
+                        fecha_vencimiento: str = None, tir_compra: float = None,
+                        nombre: str = None, notas: str = "") -> None:
+    """
+    Agrega un instrumento de renta fija a la cartera.
+    precio_compra_pct: precio en % del valor nominal (ej: 85.50 = 85.50% del VN)
+    valor_nominal: monto nominal en la moneda del instrumento
+    """
+    if fecha_compra is None:
+        fecha_compra = date.today().strftime("%Y-%m-%d")
+    if USE_POSTGRES:
+        _execute("""
+            INSERT INTO renta_fija
+                (cartera_id, ticker, tipo, nombre, valor_nominal, precio_compra_pct,
+                 moneda, fecha_compra, fecha_vencimiento, tir_compra, notas)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (cartera_id, ticker) DO UPDATE SET
+                tipo=EXCLUDED.tipo, nombre=EXCLUDED.nombre,
+                valor_nominal=EXCLUDED.valor_nominal,
+                precio_compra_pct=EXCLUDED.precio_compra_pct,
+                moneda=EXCLUDED.moneda, fecha_compra=EXCLUDED.fecha_compra,
+                fecha_vencimiento=EXCLUDED.fecha_vencimiento,
+                tir_compra=EXCLUDED.tir_compra, notas=EXCLUDED.notas
+        """, (cartera_id, ticker.upper(), tipo, nombre or ticker.upper(),
+              valor_nominal, precio_compra_pct, moneda.upper(),
+              fecha_compra, fecha_vencimiento, tir_compra, notas))
+    else:
+        _execute("""
+            INSERT INTO renta_fija
+                (cartera_id, ticker, tipo, nombre, valor_nominal, precio_compra_pct,
+                 moneda, fecha_compra, fecha_vencimiento, tir_compra, notas)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(cartera_id, ticker) DO UPDATE SET
+                tipo=excluded.tipo, nombre=excluded.nombre,
+                valor_nominal=excluded.valor_nominal,
+                precio_compra_pct=excluded.precio_compra_pct,
+                moneda=excluded.moneda, fecha_compra=excluded.fecha_compra,
+                fecha_vencimiento=excluded.fecha_vencimiento,
+                tir_compra=excluded.tir_compra, notas=excluded.notas
+        """, (cartera_id, ticker.upper(), tipo, nombre or ticker.upper(),
+              valor_nominal, precio_compra_pct, moneda.upper(),
+              fecha_compra, fecha_vencimiento, tir_compra, notas))
+
+def eliminar_renta_fija(cartera_id: int, ticker: str) -> None:
+    _execute("DELETE FROM renta_fija WHERE cartera_id=? AND ticker=?",
+             (cartera_id, ticker.upper()))
+
+def listar_renta_fija(cartera_id: int) -> pd.DataFrame:
+    return _read_sql(
+        "SELECT * FROM renta_fija WHERE cartera_id=? ORDER BY tipo, ticker",
+        [cartera_id]
+    )
+
+def calcular_pnl_renta_fija(cartera_id: int, ccl: float = 1200.0,
+                              precios_actuales: dict = None) -> pd.DataFrame:
+    """
+    Calcula P&L de renta fija.
+    precios_actuales: dict {ticker: precio_pct_actual} — si None, usa precio de compra
+    El P&L se calcula como: (precio_actual_pct - precio_compra_pct) / 100 * valor_nominal
+    """
+    df = listar_renta_fija(cartera_id)
+    if df.empty:
+        return pd.DataFrame()
+
+    rows = []
+    for _, pos in df.iterrows():
+        ticker        = pos["ticker"]
+        tipo          = pos["tipo"]
+        vn            = float(pos["valor_nominal"])
+        pct_compra    = float(pos["precio_compra_pct"])
+        moneda        = pos["moneda"]
+        tir_compra    = pos.get("tir_compra")
+        vencimiento   = pos.get("fecha_vencimiento", "—")
+
+        # Precio actual (si disponible)
+        pct_actual = precios_actuales.get(ticker) if precios_actuales else None
+        if pct_actual is None:
+            pct_actual = pct_compra  # sin datos → usar precio de compra
+
+        costo_usd  = vn * pct_compra / 100
+        valor_usd  = vn * pct_actual / 100
+        gan_usd    = valor_usd - costo_usd
+        gan_pct    = (gan_usd / costo_usd * 100) if costo_usd > 0 else 0
+
+        # Convertir a USD si está en ARS
+        if moneda == "ARS":
+            costo_usd_conv = costo_usd / ccl if ccl > 0 else costo_usd
+            valor_usd_conv = valor_usd / ccl if ccl > 0 else valor_usd
+            gan_usd_conv   = gan_usd / ccl if ccl > 0 else gan_usd
+        else:
+            costo_usd_conv = costo_usd
+            valor_usd_conv = valor_usd
+            gan_usd_conv   = gan_usd
+
+        rows.append({
+            "Ticker":           ticker,
+            "Tipo":             tipo,
+            "Valor nominal":    vn,
+            "Precio compra %":  round(pct_compra, 2),
+            "Precio actual %":  round(pct_actual, 2),
+            "Moneda":           moneda,
+            "Costo (USD)":      round(costo_usd_conv, 2),
+            "Valor actual (USD)": round(valor_usd_conv, 2),
+            "Ganancia (USD)":   round(gan_usd_conv, 2),
+            "Ganancia (%)":     round(gan_pct, 2),
+            "Ganancia (ARS)":   round(gan_usd_conv * ccl, 0),
+            "TIR compra":       round(tir_compra, 2) if tir_compra else None,
+            "Vencimiento":      vencimiento,
+        })
+    return pd.DataFrame(rows)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# FCI — Fondos Comunes de Inversión
+# ═══════════════════════════════════════════════════════════════════════════════
+
+TIPOS_FCI = ["Money Market", "Renta Fija ARS", "Renta Fija USD",
+             "Renta Variable", "Balanceado", "Infraestructura", "Ahorro"]
+
+def agregar_fci(cartera_id: int, nombre_fondo: str, cuotapartes: float,
+                valor_cuotaparte: float, moneda: str = "ARS",
+                fecha_compra: str = None, tipo_fondo: str = "Money Market",
+                gerenciadora: str = None, notas: str = "") -> None:
+    """
+    Agrega un FCI a la cartera.
+    valor_cuotaparte: precio de la cuotaparte al momento de la compra
+    """
+    if fecha_compra is None:
+        fecha_compra = date.today().strftime("%Y-%m-%d")
+    if USE_POSTGRES:
+        _execute("""
+            INSERT INTO fci
+                (cartera_id, nombre_fondo, gerenciadora, cuotapartes,
+                 valor_cuotaparte, moneda, fecha_compra, tipo_fondo, notas)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (cartera_id, nombre_fondo) DO UPDATE SET
+                gerenciadora=EXCLUDED.gerenciadora,
+                cuotapartes=EXCLUDED.cuotapartes,
+                valor_cuotaparte=EXCLUDED.valor_cuotaparte,
+                moneda=EXCLUDED.moneda, fecha_compra=EXCLUDED.fecha_compra,
+                tipo_fondo=EXCLUDED.tipo_fondo, notas=EXCLUDED.notas
+        """, (cartera_id, nombre_fondo.strip(), gerenciadora, cuotapartes,
+              valor_cuotaparte, moneda.upper(), fecha_compra, tipo_fondo, notas))
+    else:
+        _execute("""
+            INSERT INTO fci
+                (cartera_id, nombre_fondo, gerenciadora, cuotapartes,
+                 valor_cuotaparte, moneda, fecha_compra, tipo_fondo, notas)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(cartera_id, nombre_fondo) DO UPDATE SET
+                gerenciadora=excluded.gerenciadora,
+                cuotapartes=excluded.cuotapartes,
+                valor_cuotaparte=excluded.valor_cuotaparte,
+                moneda=excluded.moneda, fecha_compra=excluded.fecha_compra,
+                tipo_fondo=excluded.tipo_fondo, notas=excluded.notas
+        """, (cartera_id, nombre_fondo.strip(), gerenciadora, cuotapartes,
+              valor_cuotaparte, moneda.upper(), fecha_compra, tipo_fondo, notas))
+
+def eliminar_fci(cartera_id: int, nombre_fondo: str) -> None:
+    _execute("DELETE FROM fci WHERE cartera_id=? AND nombre_fondo=?",
+             (cartera_id, nombre_fondo.strip()))
+
+def listar_fci(cartera_id: int) -> pd.DataFrame:
+    return _read_sql(
+        "SELECT * FROM fci WHERE cartera_id=? ORDER BY tipo_fondo, nombre_fondo",
+        [cartera_id]
+    )
+
+def calcular_pnl_fci(cartera_id: int, ccl: float = 1200.0,
+                      valores_actuales: dict = None) -> pd.DataFrame:
+    """
+    Calcula P&L de FCIs.
+    valores_actuales: dict {nombre_fondo: valor_cuotaparte_actual}
+    """
+    df = listar_fci(cartera_id)
+    if df.empty:
+        return pd.DataFrame()
+
+    rows = []
+    for _, pos in df.iterrows():
+        nombre     = pos["nombre_fondo"]
+        cuotas     = float(pos["cuotapartes"])
+        vcp_compra = float(pos["valor_cuotaparte"])
+        moneda     = pos["moneda"]
+        tipo       = pos.get("tipo_fondo", "—")
+        gerenc     = pos.get("gerenciadora", "—")
+
+        vcp_actual = valores_actuales.get(nombre) if valores_actuales else None
+        if vcp_actual is None:
+            vcp_actual = vcp_compra
+
+        costo  = cuotas * vcp_compra
+        valor  = cuotas * vcp_actual
+        gan    = valor - costo
+        gan_pct = (gan / costo * 100) if costo > 0 else 0
+
+        # Convertir a USD
+        factor = ccl if moneda == "ARS" and ccl > 0 else 1
+        rows.append({
+            "Fondo":              nombre,
+            "Gerenciadora":       gerenc or "—",
+            "Tipo":               tipo,
+            "Cuotapartes":        cuotas,
+            "VCP compra":         round(vcp_compra, 4),
+            "VCP actual":         round(vcp_actual, 4),
+            "Moneda":             moneda,
+            "Costo (USD)":        round(costo / factor, 2),
+            "Valor actual (USD)": round(valor / factor, 2),
+            "Ganancia (USD)":     round(gan / factor, 2),
+            "Ganancia (%)":       round(gan_pct, 2),
+            "Ganancia (ARS)":     round(gan, 0) if moneda == "ARS" else round(gan * ccl, 0),
+        })
+    return pd.DataFrame(rows)
+
+
+def resumen_cartera_completo(cartera_id: int, ccl: float = 1200.0) -> dict:
+    """
+    Resumen consolidado de TODOS los instrumentos de una cartera:
+    acciones/CEDEARs + renta fija + FCIs.
+    """
+    # Acciones/CEDEARs
+    df_acc = calcular_pnl(cartera_id, ccl)
+    res_acc = resumen_cartera(df_acc) if not df_acc.empty else {}
+
+    # Renta fija
+    df_rf = calcular_pnl_renta_fija(cartera_id, ccl)
+    costo_rf  = df_rf["Costo (USD)"].sum()        if not df_rf.empty else 0
+    valor_rf  = df_rf["Valor actual (USD)"].sum()  if not df_rf.empty else 0
+    gan_rf    = df_rf["Ganancia (USD)"].sum()       if not df_rf.empty else 0
+
+    # FCIs
+    df_fci = calcular_pnl_fci(cartera_id, ccl)
+    costo_fci = df_fci["Costo (USD)"].sum()        if not df_fci.empty else 0
+    valor_fci = df_fci["Valor actual (USD)"].sum()  if not df_fci.empty else 0
+    gan_fci   = df_fci["Ganancia (USD)"].sum()       if not df_fci.empty else 0
+
+    costo_total = res_acc.get("Costo total (USD)", 0) + costo_rf + costo_fci
+    valor_total = res_acc.get("Valor actual (USD)", 0) + valor_rf + valor_fci
+    gan_total   = res_acc.get("Ganancia total (USD)", 0) + gan_rf + gan_fci
+    gan_pct     = (gan_total / costo_total * 100) if costo_total > 0 else 0
+
+    return {
+        "Costo total (USD)":    round(costo_total, 2),
+        "Valor actual (USD)":   round(valor_total, 2),
+        "Ganancia total (USD)": round(gan_total, 2),
+        "Ganancia total (%)":   round(gan_pct, 2),
+        "Acciones/CEDEARs":     res_acc.get("Posiciones", 0),
+        "Renta fija":           len(df_rf),
+        "FCIs":                 len(df_fci),
+        "Total instrumentos":   res_acc.get("Posiciones", 0) + len(df_rf) + len(df_fci),
+    }
