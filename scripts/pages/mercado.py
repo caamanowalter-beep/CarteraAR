@@ -370,7 +370,7 @@ def _seccion_analistas(info_dict: dict):
         st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
 
 
-def _seccion_ratings(info_dict: dict):
+def _seccion_ratings(info_dict: dict, ticker_sel: str = None):
     """Ratings detallados de analistas por ticker."""
     acciones = {t: i for t, i in info_dict.items()
                 if not i.es_etf and i.ratings}
@@ -396,21 +396,11 @@ def _seccion_ratings(info_dict: dict):
         st.session_state["_debug_count_ratings"] = st.session_state.get("_debug_count_ratings", 0) + 1
     # ── FIN DEBUG ─────────────────────────────────────────────────────────────
 
-    # Persistir selección de ticker en session_state
-    if "sel_ratings_val" not in st.session_state:
-        st.session_state["sel_ratings_val"] = list(acciones.keys())[0]
-    # Asegurar que el valor guardado sigue siendo válido
-    if st.session_state["sel_ratings_val"] not in acciones:
-        st.session_state["sel_ratings_val"] = list(acciones.keys())[0]
-
-    ticker_sel = st.selectbox(
-        "Seleccioná un ticker",
-        list(acciones.keys()),
-        index=list(acciones.keys()).index(st.session_state["sel_ratings_val"]),
-        key="sel_ratings"
-    )
-    st.session_state["sel_ratings_val"] = ticker_sel
+    # Usar ticker seleccionado globalmente (fuera de los tabs)
+    if ticker_sel is None or ticker_sel not in acciones:
+        ticker_sel = list(acciones.keys())[0]
     info = acciones[ticker_sel]
+    st.caption(f"Mostrando ratings de: **{ticker_sel}**")
 
     # Resumen consenso
     rec   = _es(info.recomendacion_consenso) if info.recomendacion_consenso else "—"
@@ -469,8 +459,8 @@ def _seccion_ratings(info_dict: dict):
         st.info(f"Sin ratings detallados para {ticker_sel}.")
 
 
-def _seccion_noticias(info_dict: dict):
-    """Noticias recientes con traducción completa o parcial al español."""
+def _seccion_noticias(info_dict: dict, ticker_sel: str = None):
+    """Noticias recientes con traducción completa o parcial al español. v2."""
 
     # ── DEBUG PANEL ───────────────────────────────────────────────────────────
     with st.expander("🔍 Debug — Estado interno (expandir para ver)", expanded=False):
@@ -486,20 +476,11 @@ def _seccion_noticias(info_dict: dict):
         st.caption("Si 'Ejecución' sube al cambiar ticker → Streamlit está recargando. Si 'sel_noticias_val' cambia → el fix funciona.")
     # ── FIN DEBUG ─────────────────────────────────────────────────────────────
 
-    # Persistir selección de ticker en session_state
-    if "sel_noticias_val" not in st.session_state:
-        st.session_state["sel_noticias_val"] = list(info_dict.keys())[0]
-    if st.session_state["sel_noticias_val"] not in info_dict:
-        st.session_state["sel_noticias_val"] = list(info_dict.keys())[0]
-
-    ticker_sel = st.selectbox(
-        "Seleccioná un ticker",
-        list(info_dict.keys()),
-        index=list(info_dict.keys()).index(st.session_state["sel_noticias_val"]),
-        key="sel_noticias"
-    )
-    st.session_state["sel_noticias_val"] = ticker_sel
+    # Usar ticker seleccionado globalmente (fuera de los tabs)
+    if ticker_sel is None or ticker_sel not in info_dict:
+        ticker_sel = list(info_dict.keys())[0]
     info = info_dict[ticker_sel]
+    st.caption(f"Mostrando noticias de: **{ticker_sel}**")
 
     if not info.noticias:
         st.info(f"Sin noticias disponibles para {ticker_sel}.")
@@ -724,6 +705,28 @@ def render():
     st.session_state[cache_key] = info_dict
     st.success(f"✅ Información obtenida para {len(info_dict)} tickers")
 
+    # ── Selector de ticker FUERA de los tabs (evita rerun al cambiar) ─────────
+    # Esto es clave: el selectbox debe estar ANTES de los tabs para que
+    # al cambiar el ticker no cause un rerun que resetee el tab activo
+    tickers_todos = list(info_dict.keys())
+    acciones_lista = [t for t, i in info_dict.items() if not i.es_etf]
+
+    if acciones_lista:
+        st.markdown("**🔍 Seleccioná el ticker para Ratings y Noticias:**")
+        # Inicializar session_state
+        if "ticker_mercado_sel" not in st.session_state or            st.session_state["ticker_mercado_sel"] not in acciones_lista:
+            st.session_state["ticker_mercado_sel"] = acciones_lista[0]
+
+        ticker_global = st.selectbox(
+            "Ticker",
+            acciones_lista,
+            index=acciones_lista.index(st.session_state["ticker_mercado_sel"]),
+            key="ticker_mercado_sel",
+            label_visibility="collapsed"
+        )
+    else:
+        ticker_global = None
+
     # ── Tabs ──────────────────────────────────────────────────────────────────
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "📅 Próximos eventos",
@@ -740,10 +743,10 @@ def render():
         _seccion_analistas(info_dict)
 
     with tab3:
-        _seccion_ratings(info_dict)
+        _seccion_ratings(info_dict, ticker_global)
 
     with tab4:
-        _seccion_noticias(info_dict)
+        _seccion_noticias(info_dict, ticker_global)
 
     with tab5:
         _seccion_etfs(info_dict)
