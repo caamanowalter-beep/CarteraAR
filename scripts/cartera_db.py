@@ -1150,33 +1150,37 @@ def actualizar_precio_bono(ticker: str, precio: float, tir: float = None,
               meta.get("vencimiento"), fuente, ahora))
 
 def listar_precios_bonos() -> pd.DataFrame:
-    """Lista todos los bonos con sus precios actualizados."""
-    try:
-        df = _read_sql("SELECT * FROM precios_bonos ORDER BY tipo, ticker")
-        if df.empty:
-            # Retornar estructura de referencia sin precios
-            rows = []
-            for ticker, meta in BONOS_REFERENCIA.items():
-                rows.append({
-                    "ticker": ticker, "nombre": meta["nombre"],
-                    "precio": None, "tir": None, "duration": None,
-                    "moneda": meta["moneda"], "tipo": meta["tipo"],
-                    "vencimiento": meta["vencimiento"],
-                    "fuente": "Sin datos", "actualizado": "—"
-                })
-            return pd.DataFrame(rows)
-        return df
-    except Exception:
+    """Lista todos los bonos con sus precios actualizados.
+    Si la tabla no existe, la crea automáticamente y retorna datos de referencia.
+    """
+    def _referencia_df():
         rows = []
         for ticker, meta in BONOS_REFERENCIA.items():
             rows.append({
                 "ticker": ticker, "nombre": meta["nombre"],
                 "precio": None, "tir": None, "duration": None,
                 "moneda": meta["moneda"], "tipo": meta["tipo"],
-                "vencimiento": meta["vencimiento"],
+                "vencimiento": meta.get("vencimiento", "—"),
                 "fuente": "Sin datos", "actualizado": "—"
             })
         return pd.DataFrame(rows)
+
+    try:
+        df = _read_sql("SELECT * FROM precios_bonos ORDER BY tipo, ticker")
+        if df.empty:
+            return _referencia_df()
+        # Merge con referencia para incluir bonos sin precio
+        df_ref = _referencia_df()
+        tickers_con_precio = set(df["ticker"].str.upper().tolist())
+        filas_sin_precio = df_ref[~df_ref["ticker"].isin(tickers_con_precio)]
+        return pd.concat([df, filas_sin_precio], ignore_index=True)
+    except Exception as e:
+        # Tabla no existe → intentar crearla
+        try:
+            init_db()  # recrea todas las tablas
+        except Exception:
+            pass
+        return _referencia_df()
 
 def eliminar_precio_bono(ticker: str) -> None:
     """Elimina el precio de un bono (vuelve a Sin datos)."""
