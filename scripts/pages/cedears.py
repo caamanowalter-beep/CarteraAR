@@ -248,8 +248,8 @@ def render():
 
     st.dataframe(
         df_show.style
-            .applymap(color_estado, subset=["Estado"])
-            .applymap(color_dif,    subset=["Diferencia (%)"])
+            .map(color_estado, subset=["Estado"])
+            .map(color_dif,    subset=["Diferencia (%)"])
             .format({
                 "Precio USD":             lambda v: f"${v:,.2f}" if v else "—",
                 "Ratio CEDEAR":           lambda v: f"{v}" if v else "—",
