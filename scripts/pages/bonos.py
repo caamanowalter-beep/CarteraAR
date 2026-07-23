@@ -162,7 +162,7 @@ def render():
     st.markdown("---")
 
     # ── Tabs bonos y ON ───────────────────────────────────────────────────────
-    tab1, tab2 = st.tabs(["📊 Bonos Soberanos", "🏢 Obligaciones Negociables"])
+    tab1, tab2, tab3 = st.tabs(["📊 Bonos Soberanos", "🏢 Obligaciones Negociables", "✏️ Actualizar precios"])
 
     with tab1:
         st.markdown("### 📊 Bonos Soberanos Argentinos")
