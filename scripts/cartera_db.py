@@ -173,6 +173,21 @@ def init_db() -> None:
         UNIQUE(cartera_id, ticker)
     )""")
 
+    # ── Precios de bonos (actualización manual) ───────────────────────────────
+    cur.execute(f"""CREATE TABLE IF NOT EXISTS precios_bonos (
+        id          {pk} PRIMARY KEY {ai},
+        ticker      TEXT    NOT NULL UNIQUE,
+        nombre      TEXT,
+        precio      REAL,
+        tir         REAL,
+        duration    REAL,
+        moneda      TEXT    NOT NULL DEFAULT 'USD',
+        tipo        TEXT    NOT NULL DEFAULT 'Soberano',
+        vencimiento TEXT,
+        fuente      TEXT    DEFAULT 'Manual',
+        actualizado TEXT    NOT NULL
+    )""")
+
     # ── FCIs ──────────────────────────────────────────────────────────────────
     cur.execute(f"""CREATE TABLE IF NOT EXISTS fci (
         id               {pk} PRIMARY KEY {ai},
@@ -1067,3 +1082,160 @@ def generar_template_dividendos_csv() -> str:
         "YPFD,2024-04-10,15000.00,ARS,ARS,0,Dividendo en pesos\n"
         "AL30,2024-07-09,35.00,USD,CCL,1,Cupon reinvertido\n"
     )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PRECIOS DE BONOS (actualización manual)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+BONOS_REFERENCIA = {
+    # Bonos USD Ley Argentina
+    "AL29": {"nombre": "Bono Soberano USD Ley Arg 2029", "moneda": "USD", "tipo": "Soberano", "vencimiento": "2029-07-09"},
+    "AL30": {"nombre": "Bono Soberano USD Ley Arg 2030", "moneda": "USD", "tipo": "Soberano", "vencimiento": "2030-07-09"},
+    "AL35": {"nombre": "Bono Soberano USD Ley Arg 2035", "moneda": "USD", "tipo": "Soberano", "vencimiento": "2035-07-09"},
+    "AL41": {"nombre": "Bono Soberano USD Ley Arg 2041", "moneda": "USD", "tipo": "Soberano", "vencimiento": "2041-07-09"},
+    # Bonos USD Ley Nueva York
+    "GD29": {"nombre": "Bono Soberano USD Ley NY 2029",  "moneda": "USD", "tipo": "Soberano", "vencimiento": "2029-07-09"},
+    "GD30": {"nombre": "Bono Soberano USD Ley NY 2030",  "moneda": "USD", "tipo": "Soberano", "vencimiento": "2030-07-09"},
+    "GD35": {"nombre": "Bono Soberano USD Ley NY 2035",  "moneda": "USD", "tipo": "Soberano", "vencimiento": "2035-07-09"},
+    "GD38": {"nombre": "Bono Soberano USD Ley NY 2038",  "moneda": "USD", "tipo": "Soberano", "vencimiento": "2038-01-09"},
+    "GD41": {"nombre": "Bono Soberano USD Ley NY 2041",  "moneda": "USD", "tipo": "Soberano", "vencimiento": "2041-07-09"},
+    # Bonos CER
+    "TX26": {"nombre": "Bono CER 2026",                  "moneda": "ARS", "tipo": "CER",      "vencimiento": "2026-11-09"},
+    "TX28": {"nombre": "Bono CER 2028",                  "moneda": "ARS", "tipo": "CER",      "vencimiento": "2028-03-21"},
+    "AE38": {"nombre": "Bono CER 2038",                  "moneda": "ARS", "tipo": "CER",      "vencimiento": "2038-01-09"},
+    "DICP": {"nombre": "Bono CER Descuento 2033",        "moneda": "ARS", "tipo": "CER",      "vencimiento": "2033-12-31"},
+    # LECAPs y Tesoro
+    "T15E7":{"nombre": "LECAP Enero 2027",               "moneda": "ARS", "tipo": "LECAP",    "vencimiento": "2027-01-15"},
+    "TMF28":{"nombre": "Bono Tesoro ARS 2028",           "moneda": "ARS", "tipo": "BONO ARS", "vencimiento": "2028-03-31"},
+    "TZX28":{"nombre": "Bono CER 2028",                  "moneda": "ARS", "tipo": "CER",      "vencimiento": "2028-03-31"},
+}
+
+def actualizar_precio_bono(ticker: str, precio: float, tir: float = None,
+                            duration: float = None, fuente: str = "Manual") -> None:
+    """
+    Actualiza o inserta el precio de un bono.
+    precio: en % del valor nominal para bonos USD (ej: 84.10)
+            en ARS por cada $100 VN para bonos ARS (ej: 1250.50)
+    tir: tasa interna de retorno en % (ej: 8.5)
+    """
+    meta = BONOS_REFERENCIA.get(ticker.upper(), {})
+    ahora = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    if USE_POSTGRES:
+        _execute("""
+            INSERT INTO precios_bonos
+                (ticker, nombre, precio, tir, duration, moneda, tipo, vencimiento, fuente, actualizado)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (ticker) DO UPDATE SET
+                precio=EXCLUDED.precio, tir=EXCLUDED.tir,
+                duration=EXCLUDED.duration, fuente=EXCLUDED.fuente,
+                actualizado=EXCLUDED.actualizado
+        """, (ticker.upper(), meta.get("nombre", ticker),
+              precio, tir, duration,
+              meta.get("moneda", "USD"), meta.get("tipo", "Soberano"),
+              meta.get("vencimiento"), fuente, ahora))
+    else:
+        _execute("""
+            INSERT INTO precios_bonos
+                (ticker, nombre, precio, tir, duration, moneda, tipo, vencimiento, fuente, actualizado)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(ticker) DO UPDATE SET
+                precio=excluded.precio, tir=excluded.tir,
+                duration=excluded.duration, fuente=excluded.fuente,
+                actualizado=excluded.actualizado
+        """, (ticker.upper(), meta.get("nombre", ticker),
+              precio, tir, duration,
+              meta.get("moneda", "USD"), meta.get("tipo", "Soberano"),
+              meta.get("vencimiento"), fuente, ahora))
+
+def listar_precios_bonos() -> pd.DataFrame:
+    """Lista todos los bonos con sus precios actualizados."""
+    try:
+        df = _read_sql("SELECT * FROM precios_bonos ORDER BY tipo, ticker")
+        if df.empty:
+            # Retornar estructura de referencia sin precios
+            rows = []
+            for ticker, meta in BONOS_REFERENCIA.items():
+                rows.append({
+                    "ticker": ticker, "nombre": meta["nombre"],
+                    "precio": None, "tir": None, "duration": None,
+                    "moneda": meta["moneda"], "tipo": meta["tipo"],
+                    "vencimiento": meta["vencimiento"],
+                    "fuente": "Sin datos", "actualizado": "—"
+                })
+            return pd.DataFrame(rows)
+        return df
+    except Exception:
+        rows = []
+        for ticker, meta in BONOS_REFERENCIA.items():
+            rows.append({
+                "ticker": ticker, "nombre": meta["nombre"],
+                "precio": None, "tir": None, "duration": None,
+                "moneda": meta["moneda"], "tipo": meta["tipo"],
+                "vencimiento": meta["vencimiento"],
+                "fuente": "Sin datos", "actualizado": "—"
+            })
+        return pd.DataFrame(rows)
+
+def eliminar_precio_bono(ticker: str) -> None:
+    """Elimina el precio de un bono (vuelve a Sin datos)."""
+    _execute("DELETE FROM precios_bonos WHERE ticker=?", (ticker.upper(),))
+
+def calcular_valor_bonos_cartera(cartera_id: int, ccl: float = 1200.0) -> pd.DataFrame:
+    """
+    Calcula el valor actual de los bonos de una cartera usando precios manuales.
+    Combina renta_fija (posiciones) con precios_bonos (precios actuales).
+    """
+    df_rf  = listar_renta_fija(cartera_id)
+    df_prec = listar_precios_bonos()
+
+    if df_rf.empty:
+        return pd.DataFrame()
+
+    precios_dict = {}
+    if not df_prec.empty:
+        for _, row in df_prec.iterrows():
+            if row.get("precio") is not None:
+                precios_dict[str(row["ticker"]).upper()] = {
+                    "precio": float(row["precio"]),
+                    "tir":    row.get("tir"),
+                    "actualizado": row.get("actualizado", "—")
+                }
+
+    rows = []
+    for _, pos in df_rf.iterrows():
+        ticker     = str(pos["ticker"]).upper()
+        tipo       = pos.get("tipo", "BONO")
+        vn         = float(pos["valor_nominal"])
+        pct_compra = float(pos["precio_compra_pct"])
+        moneda     = pos.get("moneda", "USD")
+
+        precio_info = precios_dict.get(ticker, {})
+        pct_actual  = precio_info.get("precio")
+        tir_actual  = precio_info.get("tir")
+        actualizado = precio_info.get("actualizado", "Sin precio")
+
+        costo_base  = vn * pct_compra / 100
+        valor_base  = vn * pct_actual / 100 if pct_actual else None
+        gan_base    = (valor_base - costo_base) if valor_base else None
+        gan_pct     = (gan_base / costo_base * 100) if gan_base and costo_base > 0 else None
+
+        # Convertir a USD
+        factor = ccl if moneda == "ARS" and ccl > 0 else 1
+        rows.append({
+            "Ticker":           ticker,
+            "Tipo":             tipo,
+            "Valor nominal":    vn,
+            "Precio compra %":  round(pct_compra, 2),
+            "Precio actual %":  round(pct_actual, 2) if pct_actual else None,
+            "TIR actual %":     round(float(tir_actual), 2) if tir_actual else None,
+            "Moneda":           moneda,
+            "Costo (USD)":      round(costo_base / factor, 2),
+            "Valor actual (USD)": round(valor_base / factor, 2) if valor_base else None,
+            "Ganancia (USD)":   round(gan_base / factor, 2) if gan_base else None,
+            "Ganancia (%)":     round(gan_pct, 2) if gan_pct else None,
+            "Ganancia (ARS)":   round(gan_base, 0) if gan_base and moneda == "ARS" else (round(gan_base * ccl, 0) if gan_base else None),
+            "Precio actualizado": actualizado,
+        })
+    return pd.DataFrame(rows)

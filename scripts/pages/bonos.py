@@ -5,10 +5,10 @@ Muestra precios, TIR, duration y tipos de cambio (CCL, MEP, Oficial, Blue).
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-import yfinance as yf
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import market_info as mi
+import cartera_db
 
 # ── Bonos argentinos con datos reales via yfinance ────────────────────────────
 BONOS_BYMA = {
@@ -169,7 +169,16 @@ def render():
         st.caption("Fuentes: ArgentinaDatos · BYMA Open Data")
 
         with st.spinner("Cargando datos de bonos..."):
-            df_bonos = obtener_bonos_precios()
+            df_bonos = cartera_db.listar_precios_bonos()
+            # Renombrar columnas para compatibilidad con la tabla
+            if not df_bonos.empty:
+                df_bonos = df_bonos.rename(columns={
+                    "ticker": "Ticker", "nombre": "Nombre",
+                    "precio": "Precio", "tir": "TIR",
+                    "duration": "Duration", "moneda": "Moneda",
+                    "tipo": "Tipo", "vencimiento": "Vencimiento",
+                    "fuente": "Fuente", "actualizado": "Actualizado"
+                })
 
         if df_bonos.empty:
             st.warning("No se pudieron obtener datos de bonos.")
@@ -308,3 +317,137 @@ def render():
             - Diferencia con MEP: {((tc['CCL']-tc['MEP'])/tc['MEP']*100):+.1f}%
             - Ideal para: transferir fondos al exterior, inversores sofisticados
             """)
+
+    with tab3:
+        st.markdown("### ✏️ Actualizar precios de bonos manualmente")
+        st.info(
+            "📌 **Fuentes sugeridas para copiar los precios:**\n"
+            "- [acuantoesta.com.ar](https://www.acuantoesta.com.ar/lecaps) — LECAPs y bonos\n"
+            "- [comparatasas.ar](https://comparatasas.ar/lecaps) — LECAPs\n"
+            "- Tu broker (IOL, Bull, Balanz) — todos los bonos\n\n"
+            "El precio para bonos USD va en **% del valor nominal** (ej: 84.10 = 84.10% del VN).\n"
+            "Para bonos ARS/CER va en **ARS por cada $100 VN** (ej: 1250.50)."
+        )
+
+        # Tabla actual de precios
+        df_bonos_actual = cartera_db.listar_precios_bonos()
+        
+        st.markdown("#### 📋 Precios actuales")
+        
+        # Mostrar tabla con estado de actualización
+        def color_precio(val):
+            if val is None or str(val) == "None" or str(val) == "nan":
+                return "color: #f74f4f"
+            return "color: #00c896; font-weight: bold"
+        
+        cols_show = [c for c in ["ticker","nombre","precio","tir","moneda","tipo","vencimiento","actualizado"]
+                     if c in df_bonos_actual.columns]
+        
+        st.dataframe(
+            df_bonos_actual[cols_show].style
+                .map(color_precio, subset=["precio"] if "precio" in cols_show else [])
+                .format({
+                    "precio": lambda v: f"{v:.2f}%" if v and not str(v) in ["None","nan"] else "Sin datos",
+                    "tir":    lambda v: f"{v:.2f}%" if v and not str(v) in ["None","nan"] else "—",
+                }),
+            use_container_width=True, hide_index=True
+        )
+
+        st.markdown("---")
+        st.markdown("#### ➕ Actualizar precio de un bono")
+        
+        # Formulario de actualización
+        with st.form("form_precio_bono", clear_on_submit=True):
+            tickers_disponibles = list(cartera_db.BONOS_REFERENCIA.keys())
+            
+            c1, c2 = st.columns(2)
+            ticker_bono = c1.selectbox("Ticker", tickers_disponibles)
+            fuente_precio = c2.selectbox("Fuente del precio", 
+                                          ["Manual", "acuantoesta.com.ar", "comparatasas.ar", 
+                                           "IOL", "Bull", "Balanz", "Broker propio"])
+            
+            meta = cartera_db.BONOS_REFERENCIA.get(ticker_bono, {})
+            moneda_bono = meta.get("moneda", "USD")
+            tipo_bono   = meta.get("tipo", "Soberano")
+            
+            st.caption(f"**{meta.get('nombre', ticker_bono)}** | Moneda: {moneda_bono} | Tipo: {tipo_bono} | Vence: {meta.get('vencimiento','—')}")
+            
+            c3, c4, c5 = st.columns(3)
+            if moneda_bono == "USD":
+                precio_bono = c3.number_input(
+                    "Precio (% del VN)",
+                    min_value=0.01, max_value=200.0, value=85.0, step=0.01,
+                    help="Precio en % del valor nominal. Ej: 84.10 = 84.10% del VN"
+                )
+            else:
+                precio_bono = c3.number_input(
+                    "Precio (ARS por $100 VN)",
+                    min_value=0.01, max_value=99999.0, value=1000.0, step=0.01,
+                    help="Precio en ARS por cada $100 de valor nominal"
+                )
+            
+            tir_bono      = c4.number_input("TIR (%)", min_value=0.0, max_value=200.0, 
+                                             value=0.0, step=0.01,
+                                             help="Tasa interna de retorno en %")
+            duration_bono = c5.number_input("Duration (años)", min_value=0.0, max_value=30.0,
+                                             value=0.0, step=0.01,
+                                             help="Duration modificada en años")
+            
+            if st.form_submit_button("💾 Guardar precio", type="primary", use_container_width=True):
+                cartera_db.actualizar_precio_bono(
+                    ticker_bono,
+                    precio_bono,
+                    tir_bono if tir_bono > 0 else None,
+                    duration_bono if duration_bono > 0 else None,
+                    fuente_precio
+                )
+                st.success(f"✅ {ticker_bono}: {precio_bono:.2f}{'%' if moneda_bono == 'USD' else ' ARS'} guardado")
+                st.rerun()
+
+        # Agregar bono personalizado (no en la lista)
+        with st.expander("➕ Agregar bono no listado (ON, LECAP, etc.)"):
+            with st.form("form_bono_custom", clear_on_submit=True):
+                c1, c2, c3 = st.columns(3)
+                ticker_custom = c1.text_input("Ticker", placeholder="ej: IRCPO, YM34O").upper().strip()
+                nombre_custom = c2.text_input("Nombre", placeholder="ej: ON IRSA USD 2028")
+                tipo_custom   = c3.selectbox("Tipo", ["ON USD", "ON ARS", "BONO USD", "BONO ARS", 
+                                                        "CER", "LECAP", "LETES", "Otro"])
+                c4, c5, c6 = st.columns(3)
+                precio_custom   = c4.number_input("Precio", min_value=0.01, value=100.0, step=0.01)
+                moneda_custom   = c5.selectbox("Moneda", ["USD", "ARS"])
+                tir_custom      = c6.number_input("TIR (%)", min_value=0.0, value=0.0, step=0.01)
+                venc_custom     = st.text_input("Vencimiento (YYYY-MM-DD)", placeholder="ej: 2028-06-30")
+                
+                if st.form_submit_button("💾 Agregar", type="primary", use_container_width=True):
+                    if not ticker_custom:
+                        st.error("❌ Ingresá un ticker.")
+                    else:
+                        # Agregar a BONOS_REFERENCIA temporalmente y guardar precio
+                        cartera_db.BONOS_REFERENCIA[ticker_custom] = {
+                            "nombre": nombre_custom or ticker_custom,
+                            "moneda": moneda_custom,
+                            "tipo": tipo_custom,
+                            "vencimiento": venc_custom or "—"
+                        }
+                        cartera_db.actualizar_precio_bono(
+                            ticker_custom, precio_custom,
+                            tir_custom if tir_custom > 0 else None,
+                            None, "Manual"
+                        )
+                        st.success(f"✅ {ticker_custom} agregado")
+                        st.rerun()
+
+        # Eliminar precio
+        st.markdown("---")
+        st.markdown("#### 🗑️ Eliminar precio de un bono")
+        df_con_precio = df_bonos_actual[df_bonos_actual["precio"].notna()] if "precio" in df_bonos_actual.columns else pd.DataFrame()
+        if not df_con_precio.empty:
+            ticker_del = st.selectbox("Seleccioná el bono", 
+                                       df_con_precio["ticker"].tolist() if "ticker" in df_con_precio.columns else [],
+                                       key="del_bono_sel")
+            if st.button(f"🗑️ Eliminar precio de {ticker_del}", type="secondary"):
+                cartera_db.eliminar_precio_bono(ticker_del)
+                st.warning(f"🗑️ Precio de {ticker_del} eliminado")
+                st.rerun()
+        else:
+            st.info("Sin precios cargados todavía.")
