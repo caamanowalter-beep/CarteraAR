@@ -67,6 +67,7 @@ with st.sidebar:
          "🇦🇷 CEDEARs",
          "💼 Mi Cartera",
          "📈 Historial P&L",
+         "🏆 vs Benchmark",
          "🔄 Señal de Rotación",
          "📰 Info de Mercado",
          "🏦 Bonos y ON"],
@@ -88,10 +89,32 @@ _PAGINAS = {
     "🇦🇷 CEDEARs":          "pages.cedears",
     "💼 Mi Cartera":         "pages.mi_cartera",
     "📈 Historial P&L":      "pages.historial",
+    "🏆 vs Benchmark":       "pages.benchmark",
     "🔄 Señal de Rotación":  "pages.rotacion",
     "📰 Info de Mercado":    "pages.mercado",
     "🏦 Bonos y ON":         "pages.bonos",
 }
+
+# ── Auto-snapshot al iniciar sesión ──────────────────────────────────────────
+# Guarda automáticamente el valor de todas las carteras una vez por día
+if AUTH_DISPONIBLE and auth.esta_logueado():
+    _hoy = __import__('datetime').date.today().strftime("%Y-%m-%d")
+    _snap_key = f"snapshot_done_{_hoy}"
+    if _snap_key not in st.session_state:
+        try:
+            import cartera_db as _cdb
+            import core as _core
+            _uid  = auth.get_user_id()
+            _ccl  = _core.obtener_dolar_ccl()
+            _carts = _cdb.listar_carteras(usuario_id=_uid)
+            if not _carts.empty:
+                from pages.historial import guardar_snapshot, init_historial_db
+                init_historial_db()
+                for _, _row in _carts.iterrows():
+                    guardar_snapshot(_row['id'], _ccl)
+            st.session_state[_snap_key] = True
+        except Exception:
+            pass  # No interrumpir la app si falla el snapshot
 
 if pagina in _PAGINAS:
     modulo = importlib.import_module(_PAGINAS[pagina])
