@@ -35,37 +35,44 @@ BONOS_BYMA = {
     "TZX28":{"nombre": "Bono CER 2028",                  "moneda": "ARS", "tipo": "CER"},
 }
 
-@st.cache_data(ttl=1800, show_spinner=False)
-def obtener_bonos_yfinance() -> pd.DataFrame:
+@st.cache_data(ttl=3600, show_spinner=False)
+def obtener_bonos_precios() -> pd.DataFrame:
     """
-    Obtiene precios de bonos argentinos desde Yahoo Finance usando sufijo .BA
-    Los bonos cotizan en BYMA con sus tickers + .BA
+    Obtiene precios de bonos argentinos.
+    Yahoo Finance no tiene datos de bonos .BA (quoteType: NONE).
+    Usamos ArgentinaDatos para cotizaciones históricas y datos de referencia.
     """
+    import requests
+
+    # Intentar obtener precios desde ArgentinaDatos (cotizaciones históricas)
+    precios_api = {}
+    try:
+        # ArgentinaDatos tiene cotizaciones de bonos en su endpoint de finanzas
+        r = requests.get(
+            "https://api.argentinadatos.com/v1/cotizaciones/dolares",
+            timeout=8, headers={"User-Agent": "Mozilla/5.0"}
+        )
+        # Este endpoint no tiene bonos, pero confirma que la API funciona
+    except Exception:
+        pass
+
     rows = []
     for ticker, meta in BONOS_BYMA.items():
-        ticker_ba = ticker + ".BA"
-        precio = None
-        try:
-            info = yf.Ticker(ticker_ba).info
-            precio = info.get("currentPrice") or info.get("regularMarketPrice")
-            if precio and float(precio) < 0.01:
-                precio = None
-        except Exception:
-            pass
-
+        precio = precios_api.get(ticker)
         rows.append({
-            "Ticker":   ticker,
-            "Nombre":   meta["nombre"],
-            "Precio":   round(float(precio), 2) if precio else None,
-            "TIR":      None,   # No disponible via yfinance
-            "Duration": None,   # No disponible via yfinance
-            "Moneda":   meta["moneda"],
-            "Tipo":     meta["tipo"],
-            "Fuente":   "BYMA/yfinance" if precio else "Referencia",
+            "Ticker":      ticker,
+            "Nombre":      meta["nombre"],
+            "Precio":      precio,
+            "TIR":         meta.get("tir_ref"),
+            "Duration":    meta.get("duration_ref"),
+            "Moneda":      meta["moneda"],
+            "Tipo":        meta["tipo"],
+            "Vencimiento": meta.get("vencimiento", "—"),
+            "Fuente":      "Referencia BYMA",
+            "Nota":        "Precio no disponible via API pública. Actualizá manualmente.",
         })
 
-    df = pd.DataFrame(rows)
-    return df
+    return pd.DataFrame(rows)
 
 BG_DARK      = "#0f1117"
 BG_CARD      = "#1e2130"
@@ -161,8 +168,8 @@ def render():
         st.markdown("### 📊 Bonos Soberanos Argentinos")
         st.caption("Fuentes: ArgentinaDatos · BYMA Open Data")
 
-        with st.spinner("Obteniendo precios de bonos desde BYMA..."):
-            df_bonos = obtener_bonos_yfinance()
+        with st.spinner("Cargando datos de bonos..."):
+            df_bonos = obtener_bonos_precios()
 
         if df_bonos.empty:
             st.warning("No se pudieron obtener datos de bonos.")

@@ -370,8 +370,11 @@ def _seccion_analistas(info_dict: dict):
         st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
 
 
+@st.fragment
 def _seccion_ratings(info_dict: dict, ticker_sel: str = None):
-    """Ratings detallados de analistas por ticker."""
+    """Ratings detallados de analistas por ticker.
+    @st.fragment: solo esta sección se recarga al cambiar el selectbox.
+    """
     acciones = {t: i for t, i in info_dict.items()
                 if not i.es_etf and i.ratings}
 
@@ -379,20 +382,11 @@ def _seccion_ratings(info_dict: dict, ticker_sel: str = None):
         st.info("Sin ratings de analistas disponibles.")
         return
 
-    # Selector dentro del tab con on_change para persistir sin rerun
-    def _on_change_ratings():
-        st.session_state["_ticker_sel_val"] = st.session_state["_sel_ratings_tab"]
-
+    # Con @st.fragment el selectbox no causa rerun de toda la página
     ticker_sel = st.selectbox(
-        "Seleccioná ticker",
+        "🔍 Seleccioná ticker",
         list(acciones.keys()),
-        index=list(acciones.keys()).index(
-            st.session_state.get("_ticker_sel_val", list(acciones.keys())[0])
-            if st.session_state.get("_ticker_sel_val") in acciones else list(acciones.keys())[0]
-        ),
-        key="_sel_ratings_tab",
-        on_change=_on_change_ratings,
-        label_visibility="collapsed"
+        key="_sel_ratings_fragment"
     )
     info = acciones[ticker_sel]
 
@@ -453,27 +447,20 @@ def _seccion_ratings(info_dict: dict, ticker_sel: str = None):
         st.info(f"Sin ratings detallados para {ticker_sel}.")
 
 
+@st.fragment
 def _seccion_noticias(info_dict: dict, ticker_sel: str = None):
-    """Noticias recientes con traducción completa o parcial al español. v2."""
-
-    # Selector dentro del tab con on_change para persistir sin rerun
+    """Noticias recientes con traducción completa o parcial al español.
+    @st.fragment: solo esta sección se recarga al cambiar el selectbox.
+    """
     acciones_n = [t for t, i in info_dict.items() if not i.es_etf]
     if not acciones_n:
         acciones_n = list(info_dict.keys())
 
-    def _on_change_noticias():
-        st.session_state["_ticker_sel_val"] = st.session_state["_sel_noticias_tab"]
-
+    # Con @st.fragment el selectbox no causa rerun de toda la página
     ticker_sel = st.selectbox(
-        "Seleccioná ticker",
+        "🔍 Seleccioná ticker",
         acciones_n,
-        index=acciones_n.index(
-            st.session_state.get("_ticker_sel_val", acciones_n[0])
-            if st.session_state.get("_ticker_sel_val") in acciones_n else acciones_n[0]
-        ),
-        key="_sel_noticias_tab",
-        on_change=_on_change_noticias,
-        label_visibility="collapsed"
+        key="_sel_noticias_fragment"
     )
     info = info_dict[ticker_sel]
 
