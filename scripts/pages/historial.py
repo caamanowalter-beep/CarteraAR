@@ -42,6 +42,8 @@ def guardar_snapshot(cartera_id: int, ccl: float) -> dict:
     Retorna el resumen guardado.
     """
     try:
+        # Asegurar que la tabla existe antes de insertar
+        init_historial_db()
         df_pnl = cartera_db.calcular_pnl(cartera_id, ccl=ccl)
         res    = cartera_db.resumen_cartera(df_pnl)
 
@@ -100,8 +102,8 @@ def listar_historial(cartera_id: int, dias: int = 365) -> pd.DataFrame:
     except Exception:
         return pd.DataFrame()
 
-def init_historial_db() -> None:
-    """Crea la tabla historial_pnl si no existe."""
+def init_historial_db() -> bool:
+    """Crea la tabla historial_pnl si no existe. Retorna True si OK."""
     con = cartera_db._get_connection()
     cur = con.cursor()
     pk = "SERIAL" if cartera_db.USE_POSTGRES else "INTEGER"
@@ -120,8 +122,9 @@ def init_historial_db() -> None:
             UNIQUE(cartera_id, fecha)
         )""")
         con.commit()
-    except Exception:
-        pass
+        return True
+    except Exception as e:
+        return False
     finally:
         con.close()
 
@@ -286,17 +289,25 @@ def render():
         st.metric("CCL actual", f"${ccl:,.0f}")
 
         if st.button("📸 Guardar snapshot de hoy", type="primary", use_container_width=True):
+            # Asegurar que la tabla existe
+            init_historial_db()
             if cartera_id == -1:
-                # Guardar snapshot de todas las carteras
+                errores = []
                 for _, row in df_carteras.iterrows():
-                    guardar_snapshot(row['id'], ccl)
-                st.success("✅ Snapshots guardados para todas las carteras")
+                    res = guardar_snapshot(row['id'], ccl)
+                    if "error" in res:
+                        errores.append(f"{row['nombre']}: {res['error']}")
+                if errores:
+                    st.error(f"❌ Errores: {'; '.join(errores)}")
+                else:
+                    st.success("✅ Snapshots guardados para todas las carteras")
             else:
                 res = guardar_snapshot(cartera_id, ccl)
                 if "error" in res:
-                    st.error(f"❌ {res['error']}")
+                    st.error(f"❌ Error al guardar: {res['error']}")
+                    st.info("💡 Ejecutá el SQL en Supabase para crear la tabla historial_pnl")
                 else:
-                    st.success(f"✅ Snapshot guardado: ${res['valor_usd']:,.2f} USD")
+                    st.success(f"✅ Snapshot guardado: ${res.get('valor_usd', 0):,.2f} USD ({res.get('fecha','')})")
             st.rerun()
 
     # ── Contenido principal ───────────────────────────────────────────────────
