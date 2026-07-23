@@ -226,7 +226,26 @@ def render():
 
     # ── Obtener historial de la cartera ───────────────────────────────────────
     try:
-        from pages.historial import listar_historial, init_historial_db
+        # Importar funciones de historial de forma robusta
+        import importlib, sys
+        # Intentar import directo
+        try:
+            from pages.historial import listar_historial, init_historial_db
+        except ImportError:
+            # Fallback: definir funciones inline
+            def init_historial_db():
+                pass
+            def listar_historial(cid, dias=365):
+                from datetime import date, timedelta
+                desde = (date.today() - timedelta(days=dias)).strftime("%Y-%m-%d")
+                try:
+                    return cartera_db._read_sql(
+                        "SELECT * FROM historial_pnl WHERE cartera_id=? AND fecha>=? ORDER BY fecha",
+                        [cid, desde]
+                    )
+                except Exception:
+                    return __import__('pandas').DataFrame()
+
         init_historial_db()
         df_hist = listar_historial(cartera_id, dias)
     except Exception as e:
