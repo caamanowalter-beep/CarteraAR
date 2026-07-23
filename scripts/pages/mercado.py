@@ -379,6 +379,23 @@ def _seccion_ratings(info_dict: dict):
         st.info("Sin ratings de analistas disponibles.")
         return
 
+    # ── DEBUG PANEL ───────────────────────────────────────────────────────────
+    with st.expander("🔍 Debug — Estado interno (expandir para ver)", expanded=False):
+        st.markdown("**Session State relevante:**")
+        debug_info = {
+            "sel_ratings_val":  st.session_state.get("sel_ratings_val", "NO DEFINIDO"),
+            "sel_noticias_val": st.session_state.get("sel_noticias_val", "NO DEFINIDO"),
+            "cache_keys":       [k for k in st.session_state.keys() if k.startswith("mercado_info_")],
+            "tickers_en_acciones": list(acciones.keys()),
+            "total_tickers":    len(acciones),
+        }
+        for k, v in debug_info.items():
+            st.markdown(f"- **{k}**: `{v}`")
+        st.markdown("**Trigger de recarga:**")
+        st.markdown(f"- Ejecución #{st.session_state.get('_debug_count_ratings', 0)}")
+        st.session_state["_debug_count_ratings"] = st.session_state.get("_debug_count_ratings", 0) + 1
+    # ── FIN DEBUG ─────────────────────────────────────────────────────────────
+
     # Persistir selección de ticker en session_state
     if "sel_ratings_val" not in st.session_state:
         st.session_state["sel_ratings_val"] = list(acciones.keys())[0]
@@ -454,6 +471,21 @@ def _seccion_ratings(info_dict: dict):
 
 def _seccion_noticias(info_dict: dict):
     """Noticias recientes con traducción completa o parcial al español."""
+
+    # ── DEBUG PANEL ───────────────────────────────────────────────────────────
+    with st.expander("🔍 Debug — Estado interno (expandir para ver)", expanded=False):
+        ejecucion = st.session_state.get("_debug_count_noticias", 0) + 1
+        st.session_state["_debug_count_noticias"] = ejecucion
+        st.markdown(f"**Ejecución #{ejecucion}** — esto sube cada vez que Streamlit recarga esta función")
+        st.markdown("**Session State:**")
+        st.json({
+            "sel_noticias_val":  st.session_state.get("sel_noticias_val", "NO DEFINIDO"),
+            "tickers_disponibles": list(info_dict.keys()),
+            "cache_keys": [k for k in st.session_state.keys() if "mercado" in k],
+        })
+        st.caption("Si 'Ejecución' sube al cambiar ticker → Streamlit está recargando. Si 'sel_noticias_val' cambia → el fix funciona.")
+    # ── FIN DEBUG ─────────────────────────────────────────────────────────────
+
     # Persistir selección de ticker en session_state
     if "sel_noticias_val" not in st.session_state:
         st.session_state["sel_noticias_val"] = list(info_dict.keys())[0]
