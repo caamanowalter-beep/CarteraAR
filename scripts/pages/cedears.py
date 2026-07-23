@@ -248,8 +248,8 @@ def render():
 
     st.dataframe(
         df_show.style
-            .map(color_estado, subset=["Estado"])
-            .map(color_dif,    subset=["Diferencia (%)"])
+            .applymap(color_estado, subset=["Estado"])
+            .applymap(color_dif,    subset=["Diferencia (%)"])
             .format({
                 "Precio USD":             lambda v: f"${v:,.2f}" if v else "—",
                 "Ratio CEDEAR":           lambda v: f"{v}" if v else "—",
@@ -273,20 +273,29 @@ def render():
         else:
             st.info("No hay datos suficientes para graficar.")
 
-    # ── Detalle por ticker ────────────────────────────────────────────────────
+    # ── Detalle por ticker — @st.fragment evita rerun al cambiar ticker ────────
     st.markdown("---")
-    st.markdown("### 🔍 Detalle por ticker")
-    ticker_sel = st.selectbox("Seleccioná un ticker", df["Ticker"].tolist())
-    row = df[df["Ticker"] == ticker_sel].iloc[0]
 
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Precio USD",            f"${row['Precio USD']:,.2f}"           if row['Precio USD']           else "—")
-    c2.metric("Valor implícito (ARS)", f"${row['Valor implícito (ARS)']:,.2f}" if row['Valor implícito (ARS)'] else "—")
-    c3.metric("Precio CEDEAR (ARS)",   f"${row['Precio CEDEAR (ARS)']:,.2f}"  if row['Precio CEDEAR (ARS)']  else "—",
-              delta=f"{row['Diferencia (%)']:+.1f}%" if row['Diferencia (%)'] else None)
+    @st.fragment
+    def _detalle_cedear(df_data, ccl_val):
+        st.markdown("### 🔍 Detalle por ticker")
+        ticker_sel = st.selectbox(
+            "Seleccioná un ticker",
+            df_data["Ticker"].tolist(),
+            key="_ced_ticker_detail"
+        )
+        row = df_data[df_data["Ticker"] == ticker_sel].iloc[0]
 
-    st.markdown(f"**Estado:** {row['Estado']}  |  **Tipo:** {row['Tipo']}  |  **Ratio:** {row['Ratio CEDEAR']}")
-    st.caption(f"Fórmula: ${row['Precio USD'] or '?'} ÷ {row['Ratio CEDEAR'] or '?'} × ${ccl:,.0f} CCL = ${row['Valor implícito (ARS)'] or '?'} ARS")
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Precio USD",            f"${row['Precio USD']:,.2f}"           if row['Precio USD']           else "—")
+        c2.metric("Valor implícito (ARS)", f"${row['Valor implícito (ARS)']:,.2f}" if row['Valor implícito (ARS)'] else "—")
+        c3.metric("Precio CEDEAR (ARS)",   f"${row['Precio CEDEAR (ARS)']:,.2f}"  if row['Precio CEDEAR (ARS)']  else "—",
+                  delta=f"{row['Diferencia (%)']:+.1f}%" if row['Diferencia (%)'] else None)
+
+        st.markdown(f"**Estado:** {row['Estado']}  |  **Tipo:** {row['Tipo']}  |  **Ratio:** {row['Ratio CEDEAR']}")
+        st.caption(f"Fórmula: ${row['Precio USD'] or '?'} ÷ {row['Ratio CEDEAR'] or '?'} × ${ccl_val:,.0f} CCL = ${row['Valor implícito (ARS)'] or '?'} ARS")
+
+    _detalle_cedear(df, ccl)
 
     # ── Exportar ──────────────────────────────────────────────────────────────
     st.markdown("---")
