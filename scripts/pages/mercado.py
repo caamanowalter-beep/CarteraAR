@@ -379,11 +379,20 @@ def _seccion_ratings(info_dict: dict):
         st.info("Sin ratings de analistas disponibles.")
         return
 
+    # Persistir selección de ticker en session_state
+    if "sel_ratings_val" not in st.session_state:
+        st.session_state["sel_ratings_val"] = list(acciones.keys())[0]
+    # Asegurar que el valor guardado sigue siendo válido
+    if st.session_state["sel_ratings_val"] not in acciones:
+        st.session_state["sel_ratings_val"] = list(acciones.keys())[0]
+
     ticker_sel = st.selectbox(
         "Seleccioná un ticker",
         list(acciones.keys()),
+        index=list(acciones.keys()).index(st.session_state["sel_ratings_val"]),
         key="sel_ratings"
     )
+    st.session_state["sel_ratings_val"] = ticker_sel
     info = acciones[ticker_sel]
 
     # Resumen consenso
@@ -445,11 +454,19 @@ def _seccion_ratings(info_dict: dict):
 
 def _seccion_noticias(info_dict: dict):
     """Noticias recientes con traducción completa o parcial al español."""
+    # Persistir selección de ticker en session_state
+    if "sel_noticias_val" not in st.session_state:
+        st.session_state["sel_noticias_val"] = list(info_dict.keys())[0]
+    if st.session_state["sel_noticias_val"] not in info_dict:
+        st.session_state["sel_noticias_val"] = list(info_dict.keys())[0]
+
     ticker_sel = st.selectbox(
         "Seleccioná un ticker",
         list(info_dict.keys()),
+        index=list(info_dict.keys()).index(st.session_state["sel_noticias_val"]),
         key="sel_noticias"
     )
+    st.session_state["sel_noticias_val"] = ticker_sel
     info = info_dict[ticker_sel]
 
     if not info.noticias:
