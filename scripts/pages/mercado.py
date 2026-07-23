@@ -278,15 +278,35 @@ def _seccion_eventos(info_dict: dict):
         st.info("Sin eventos próximos detectados.")
         return
 
+    # Filtrar solo eventos futuros o del mes actual (no históricos)
+    from datetime import datetime, timedelta
+    hoy = datetime.now()
+    hace_30_dias = hoy - timedelta(days=30)
+
+    eventos_filtrados = []
+    for ticker, ev in eventos:
+        try:
+            fecha_ev = datetime.strptime(ev.fecha, "%d/%m/%Y")
+            # Solo incluir si es futuro o de los últimos 30 días
+            if fecha_ev >= hace_30_dias:
+                eventos_filtrados.append((ticker, ev))
+        except Exception:
+            # Si no se puede parsear la fecha, incluir igual
+            eventos_filtrados.append((ticker, ev))
+
+    if not eventos_filtrados:
+        st.info("Sin eventos próximos. Los dividendos históricos se omiten.")
+        return
+
     # Ordenar por fecha
     def _sort_key(item):
         try:
-            from datetime import datetime
             return datetime.strptime(item[1].fecha, "%d/%m/%Y")
         except Exception:
             return item[1].fecha
 
-    eventos.sort(key=_sort_key)
+    eventos_filtrados.sort(key=_sort_key)
+    eventos = eventos_filtrados
 
     for ticker, ev in eventos:
         es_earnings = "earnings" in ev.tipo.lower()
@@ -622,26 +642,37 @@ def render():
         st.error("❌ Ingresá al menos un ticker.")
         return
 
-    # ── Obtener información ───────────────────────────────────────────────────
-    with st.spinner(f"📡 Obteniendo información de {len(tickers_lista)} tickers..."):
-        prog    = st.progress(0)
-        info_dict = {}
-        for i, ticker in enumerate(tickers_lista):
-            try:
-                info_dict[ticker] = mi.obtener_info_mercado(
-                    ticker,
-                    max_noticias=max_noticias,
-                    incluir_ratings=incluir_ratings
-                )
-            except Exception as e:
-                st.warning(f"⚠️ Error con {ticker}: {e}")
-            prog.progress((i+1)/len(tickers_lista))
-        prog.empty()
+    # Clave de caché única por combinación de tickers
+    cache_key = f"mercado_info_{'_'.join(sorted(tickers_lista))}"
+
+    # ── Obtener información (o usar caché) ────────────────────────────────────
+    if analizar or cache_key not in st.session_state:
+        with st.spinner(f"📡 Obteniendo información de {len(tickers_lista)} tickers..."):
+            prog    = st.progress(0)
+            info_dict = {}
+            for i, ticker in enumerate(tickers_lista):
+                try:
+                    info_dict[ticker] = mi.obtener_info_mercado(
+                        ticker,
+                        max_noticias=max_noticias,
+                        incluir_ratings=incluir_ratings
+                    )
+                except Exception as e:
+                    st.warning(f"⚠️ Error con {ticker}: {e}")
+                prog.progress((i+1)/len(tickers_lista))
+            prog.empty()
+        # Guardar en session_state para que persista al cambiar de tab
+        st.session_state[cache_key] = info_dict
+    else:
+        # Usar datos cacheados — no recarga al cambiar de tab
+        info_dict = st.session_state[cache_key]
 
     if not info_dict:
         st.error("❌ No se pudo obtener información. Verificá la conexión.")
         return
 
+    # Guardar en session_state para que persista al cambiar de tab
+    st.session_state[cache_key] = info_dict
     st.success(f"✅ Información obtenida para {len(info_dict)} tickers")
 
     # ── Tabs ──────────────────────────────────────────────────────────────────
