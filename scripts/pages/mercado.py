@@ -379,23 +379,6 @@ def _seccion_ratings(info_dict: dict, ticker_sel: str = None):
         st.info("Sin ratings de analistas disponibles.")
         return
 
-    # ── DEBUG PANEL ───────────────────────────────────────────────────────────
-    with st.expander("🔍 Debug — Estado interno (expandir para ver)", expanded=False):
-        st.markdown("**Session State relevante:**")
-        debug_info = {
-            "sel_ratings_val":  st.session_state.get("sel_ratings_val", "NO DEFINIDO"),
-            "sel_noticias_val": st.session_state.get("sel_noticias_val", "NO DEFINIDO"),
-            "cache_keys":       [k for k in st.session_state.keys() if k.startswith("mercado_info_")],
-            "tickers_en_acciones": list(acciones.keys()),
-            "total_tickers":    len(acciones),
-        }
-        for k, v in debug_info.items():
-            st.markdown(f"- **{k}**: `{v}`")
-        st.markdown("**Trigger de recarga:**")
-        st.markdown(f"- Ejecución #{st.session_state.get('_debug_count_ratings', 0)}")
-        st.session_state["_debug_count_ratings"] = st.session_state.get("_debug_count_ratings", 0) + 1
-    # ── FIN DEBUG ─────────────────────────────────────────────────────────────
-
     # Usar ticker seleccionado globalmente (fuera de los tabs)
     if ticker_sel is None or ticker_sel not in acciones:
         ticker_sel = list(acciones.keys())[0]
@@ -461,20 +444,6 @@ def _seccion_ratings(info_dict: dict, ticker_sel: str = None):
 
 def _seccion_noticias(info_dict: dict, ticker_sel: str = None):
     """Noticias recientes con traducción completa o parcial al español. v2."""
-
-    # ── DEBUG PANEL ───────────────────────────────────────────────────────────
-    with st.expander("🔍 Debug — Estado interno (expandir para ver)", expanded=False):
-        ejecucion = st.session_state.get("_debug_count_noticias", 0) + 1
-        st.session_state["_debug_count_noticias"] = ejecucion
-        st.markdown(f"**Ejecución #{ejecucion}** — esto sube cada vez que Streamlit recarga esta función")
-        st.markdown("**Session State:**")
-        st.json({
-            "sel_noticias_val":  st.session_state.get("sel_noticias_val", "NO DEFINIDO"),
-            "tickers_disponibles": list(info_dict.keys()),
-            "cache_keys": [k for k in st.session_state.keys() if "mercado" in k],
-        })
-        st.caption("Si 'Ejecución' sube al cambiar ticker → Streamlit está recargando. Si 'sel_noticias_val' cambia → el fix funciona.")
-    # ── FIN DEBUG ─────────────────────────────────────────────────────────────
 
     # Usar ticker seleccionado globalmente (fuera de los tabs)
     if ticker_sel is None or ticker_sel not in info_dict:
@@ -705,25 +674,25 @@ def render():
     st.session_state[cache_key] = info_dict
     st.success(f"✅ Información obtenida para {len(info_dict)} tickers")
 
-    # ── Selector de ticker FUERA de los tabs (evita rerun al cambiar) ─────────
-    # Esto es clave: el selectbox debe estar ANTES de los tabs para que
-    # al cambiar el ticker no cause un rerun que resetee el tab activo
-    tickers_todos = list(info_dict.keys())
+    # ── Selector de ticker FUERA de los tabs ────────────────────────────────
+    # Clave: usar nombre distinto para key vs variable de session_state
     acciones_lista = [t for t, i in info_dict.items() if not i.es_etf]
 
     if acciones_lista:
-        st.markdown("**🔍 Seleccioná el ticker para Ratings y Noticias:**")
-        # Inicializar session_state
-        if "ticker_mercado_sel" not in st.session_state or            st.session_state["ticker_mercado_sel"] not in acciones_lista:
-            st.session_state["ticker_mercado_sel"] = acciones_lista[0]
+        # Usar "_ticker_sel_widget" como key del widget (distinto a la variable)
+        if "_ticker_sel_val" not in st.session_state or            st.session_state["_ticker_sel_val"] not in acciones_lista:
+            st.session_state["_ticker_sel_val"] = acciones_lista[0]
 
+        st.markdown("**🔍 Ticker para Ratings y Noticias:**")
         ticker_global = st.selectbox(
-            "Ticker",
+            "Ticker para Ratings y Noticias",
             acciones_lista,
-            index=acciones_lista.index(st.session_state["ticker_mercado_sel"]),
-            key="ticker_mercado_sel",
+            index=acciones_lista.index(st.session_state["_ticker_sel_val"]),
+            key="_ticker_sel_widget",
             label_visibility="collapsed"
         )
+        # Guardar en variable separada (no en el key del widget)
+        st.session_state["_ticker_sel_val"] = ticker_global
     else:
         ticker_global = None
 
