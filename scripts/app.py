@@ -11,22 +11,103 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ── Estilos globales ──────────────────────────────────────────────────────────
+# ── Estilos globales + UX móvil ──────────────────────────────────────────────
 st.markdown("""
 <style>
+    /* ── Ocultar nav automática ── */
     [data-testid="stSidebarNav"] { display: none !important; }
+
+    /* ── Sidebar oscuro ── */
     [data-testid="stSidebar"] { background-color: #1a1f2e !important; }
     [data-testid="stSidebar"] * { color: #e2e8f0 !important; }
     [data-testid="stSidebar"] .stRadio label {
-        color: #e2e8f0 !important; font-size: 15px !important; padding: 4px 0 !important;
+        color: #e2e8f0 !important;
+        font-size: 15px !important;
+        padding: 6px 0 !important;
+        min-height: 36px !important;  /* botones más grandes en móvil */
     }
     [data-testid="stSidebar"] hr { border-color: #2d3748 !important; }
+
+    /* ── Métricas ── */
     .metric-card {
         background: #1e2130; border-radius: 10px;
         padding: 16px 20px; margin-bottom: 10px;
     }
-    .stTabs [data-baseweb="tab"] { font-size: 15px; }
-    div[data-testid="stMetricValue"] > div { font-size: 28px; }
+    div[data-testid="stMetricValue"] > div { font-size: 24px; }
+
+    /* ── Tabs más grandes en móvil ── */
+    .stTabs [data-baseweb="tab"] {
+        font-size: 13px !important;
+        padding: 8px 10px !important;
+        min-height: 40px !important;
+    }
+
+    /* ── Tablas responsivas ── */
+    [data-testid="stDataFrame"] {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+    [data-testid="stDataFrame"] table {
+        font-size: 12px !important;
+    }
+    [data-testid="stDataFrame"] th {
+        font-size: 11px !important;
+        white-space: nowrap !important;
+        padding: 4px 6px !important;
+    }
+    [data-testid="stDataFrame"] td {
+        font-size: 12px !important;
+        padding: 4px 6px !important;
+    }
+
+    /* ── Botones más grandes en móvil ── */
+    .stButton > button {
+        min-height: 44px !important;
+        font-size: 14px !important;
+        border-radius: 8px !important;
+    }
+
+    /* ── Inputs más grandes ── */
+    .stTextInput input, .stNumberInput input, .stSelectbox select {
+        min-height: 40px !important;
+        font-size: 14px !important;
+    }
+
+    /* ── Formularios más compactos en móvil ── */
+    @media (max-width: 768px) {
+        /* Reducir padding en móvil */
+        .block-container {
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+            padding-top: 1rem !important;
+        }
+        /* Métricas más compactas */
+        div[data-testid="stMetricValue"] > div { font-size: 18px !important; }
+        div[data-testid="stMetricLabel"] { font-size: 11px !important; }
+        /* Tabs más pequeños */
+        .stTabs [data-baseweb="tab"] {
+            font-size: 11px !important;
+            padding: 6px 6px !important;
+        }
+        /* Ocultar columnas menos importantes en tablas */
+        .hide-mobile { display: none !important; }
+    }
+
+    /* ── Gráficos responsivos ── */
+    .js-plotly-plot {
+        width: 100% !important;
+    }
+
+    /* ── Cards de información ── */
+    div[style*="border-radius:10px"] {
+        margin-bottom: 8px !important;
+    }
+
+    /* ── Expanders más compactos ── */
+    .streamlit-expanderHeader {
+        font-size: 14px !important;
+        min-height: 40px !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -43,6 +124,11 @@ if AUTH_DISPONIBLE:
         st.stop()
 
 # ── Navegación lateral ────────────────────────────────────────────────────────
+# Manejar navegación desde botones de acceso rápido (móvil)
+if "_nav_override" in st.session_state:
+    _nav_target = st.session_state.pop("_nav_override")
+    st.session_state["_pagina_actual"] = _nav_target
+
 with st.sidebar:
     # Logo y nombre
     import os
@@ -59,20 +145,19 @@ with st.sidebar:
         unsafe_allow_html=True
     )
     st.markdown("---")
+    _opciones = ["🏠 Inicio", "📊 Análisis de Cartera", "📈 Análisis Técnico",
+                 "🇦🇷 CEDEARs", "💼 Mi Cartera", "📈 Historial P&L",
+                 "🏆 vs Benchmark", "🔄 Señal de Rotación",
+                 "📰 Info de Mercado", "🏦 Bonos y ON"]
+    _idx = 0
+    if "_pagina_actual" in st.session_state and st.session_state["_pagina_actual"] in _opciones:
+        _idx = _opciones.index(st.session_state["_pagina_actual"])
     pagina = st.radio(
-        "Navegación",
-        ["🏠 Inicio",
-         "📊 Análisis de Cartera",
-         "📈 Análisis Técnico",
-         "🇦🇷 CEDEARs",
-         "💼 Mi Cartera",
-         "📈 Historial P&L",
-         "🏆 vs Benchmark",
-         "🔄 Señal de Rotación",
-         "📰 Info de Mercado",
-         "🏦 Bonos y ON"],
+        "Navegación", _opciones,
+        index=_idx,
         label_visibility="collapsed"
     )
+    st.session_state["_pagina_actual"] = pagina
     st.markdown("---")
     st.caption("v3.0 — Financieramente.ok")
 

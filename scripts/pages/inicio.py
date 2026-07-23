@@ -46,6 +46,8 @@ def _card_metrica(titulo: str, valor: str, subtitulo: str = "",
         unsafe_allow_html=True
     )
 
+CHART_HEIGHT = 360  # altura uniforme para todos los gráficos del dashboard
+
 def _grafico_composicion_total(grupos: dict) -> go.Figure:
     """Gráfico de torta con composición total de la cartera."""
     labels = list(grupos.keys())
@@ -62,8 +64,9 @@ def _grafico_composicion_total(grupos: dict) -> go.Figure:
     fig.update_layout(
         title="Composición total de la cartera",
         plot_bgcolor=BG_DARK, paper_bgcolor=BG_CARD,
-        font=dict(color="white"), height=360,
-        legend=dict(bgcolor=BG_CARD)
+        font=dict(color="white"), height=CHART_HEIGHT,
+        legend=dict(bgcolor=BG_CARD),
+        margin=dict(t=50, b=20, l=20, r=20)
     )
     return fig
 
@@ -91,10 +94,66 @@ def _grafico_ganancia_grupos(grupos: dict) -> go.Figure:
         title="Ganancia % por grupo de inversión",
         yaxis_title="Ganancia (%)",
         plot_bgcolor=BG_DARK, paper_bgcolor=BG_CARD,
-        font=dict(color="white"), height=360,
-        showlegend=False
+        font=dict(color="white"), height=CHART_HEIGHT,
+        showlegend=False,
+        margin=dict(t=50, b=20, l=40, r=20)
     )
     return fig
+
+
+def _vista_movil_rapida(df_carteras, ccl):
+    """Vista ultra-compacta para móvil — solo métricas clave."""
+    st.markdown("### 📱 Resumen rápido")
+    uid = _get_user_id()
+
+    total_valor = 0
+    total_gan   = 0
+    total_gan_pct = 0
+    n_carteras  = 0
+
+    for _, row in df_carteras.iterrows():
+        try:
+            df_pnl = cartera_db.calcular_pnl(row['id'], ccl=ccl)
+            if not df_pnl.empty:
+                res = cartera_db.resumen_cartera(df_pnl)
+                total_valor += res.get("Valor actual (USD)", 0) or 0
+                total_gan   += res.get("Ganancia total (USD)", 0) or 0
+                n_carteras  += 1
+        except Exception:
+            pass
+
+    if total_valor > 0:
+        total_gan_pct = (total_gan / (total_valor - total_gan) * 100) if (total_valor - total_gan) > 0 else 0
+
+    # Métricas en 2 columnas (más compacto en móvil)
+    c1, c2 = st.columns(2)
+    c1.metric("💰 Valor total", f"${total_valor:,.0f}")
+    gan_color = "normal"
+    c2.metric("📈 Ganancia", f"${total_gan:+,.0f}",
+              delta=f"{total_gan_pct:+.1f}%", delta_color=gan_color)
+
+    c3, c4 = st.columns(2)
+    c3.metric("💱 CCL", f"${ccl:,.0f}")
+    c4.metric("💼 Carteras", n_carteras)
+
+    st.markdown("---")
+    st.markdown("**Accesos rápidos:**")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.page_link("pages/mi_cartera.py", label="💼 Mi Cartera", icon="💼") if False else None
+        if st.button("💼 Mi Cartera", use_container_width=True, key="mob_cartera"):
+            st.session_state["_nav_override"] = "💼 Mi Cartera"
+            st.rerun()
+        if st.button("🇦🇷 CEDEARs", use_container_width=True, key="mob_cedears"):
+            st.session_state["_nav_override"] = "🇦🇷 CEDEARs"
+            st.rerun()
+    with col2:
+        if st.button("🔄 Señal Rotación", use_container_width=True, key="mob_rotacion"):
+            st.session_state["_nav_override"] = "🔄 Señal de Rotación"
+            st.rerun()
+        if st.button("🏦 Bonos y ON", use_container_width=True, key="mob_bonos"):
+            st.session_state["_nav_override"] = "🏦 Bonos y ON"
+            st.rerun()
 
 
 def render():
