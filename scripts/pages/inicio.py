@@ -91,7 +91,7 @@ def _grafico_ganancia_grupos(grupos: dict) -> go.Figure:
         title="Ganancia % por grupo de inversión",
         yaxis_title="Ganancia (%)",
         plot_bgcolor=BG_DARK, paper_bgcolor=BG_CARD,
-        font=dict(color="white"), height=320,
+        font=dict(color="white"), height=360,
         showlegend=False
     )
     return fig
