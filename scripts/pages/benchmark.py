@@ -48,20 +48,25 @@ BENCHMARKS = {
 # FUNCIONES DE BENCHMARK
 # ═══════════════════════════════════════════════════════════════════════════════
 
-@st.cache_data(ttl=3600, show_spinner=False)
+@st.cache_data(ttl=7200, show_spinner=False)
 def descargar_benchmark(ticker: str, fecha_inicio: str, fecha_fin: str) -> pd.Series:
     """Descarga precios históricos de un benchmark y retorna retornos acumulados."""
-    try:
-        df = yf.download(ticker, start=fecha_inicio, end=fecha_fin,
-                        interval="1d", progress=False, auto_adjust=True)
-        if df.empty:
-            return pd.Series(dtype=float)
-        close = df["Close"].squeeze()
-        # Retorno acumulado desde el inicio (base 100)
-        retorno = (close / close.iloc[0] - 1) * 100
-        return retorno
-    except Exception:
-        return pd.Series(dtype=float)
+    import time
+    # Intentar múltiples veces con delay para evitar rate limiting
+    for intento in range(3):
+        try:
+            df = yf.download(ticker, start=fecha_inicio, end=fecha_fin,
+                            interval="1d", progress=False, auto_adjust=True)
+            if not df.empty:
+                close = df["Close"].squeeze()
+                if hasattr(close, 'iloc') and len(close) > 0:
+                    retorno = (close / float(close.iloc[0]) - 1) * 100
+                    return retorno
+        except Exception:
+            pass
+        if intento < 2:
+            time.sleep(1)  # esperar 1 segundo entre intentos
+    return pd.Series(dtype=float)
 
 def calcular_retorno_cartera(df_hist: pd.DataFrame) -> pd.Series:
     """
@@ -252,11 +257,20 @@ def render():
         st.error(f"❌ Error al obtener historial: {e}")
         return
 
-    if df_hist.empty:
+    if df_hist.empty or len(df_hist) < 2:
+        n = len(df_hist) if not df_hist.empty else 0
         st.warning(
-            f"⚠️ Sin historial para **{nombre_cartera}**. "
-            "Guardá snapshots diarios en **📈 Historial P&L** para poder comparar."
+            f"⚠️ Historial insuficiente para **{nombre_cartera}** ({n} snapshot/s). "
+            "Se necesitan al menos **2 snapshots** en fechas distintas para comparar."
         )
+        if n == 1:
+            st.info(
+                "✅ Ya tenés 1 snapshot guardado. "
+                "Mañana al abrir la app se guardará automáticamente el segundo, "
+                "o podés ejecutar `guardar_snapshot_real.py` con fechas anteriores."
+            )
+        elif n == 0:
+            st.info("Guardá el primer snapshot en **📈 Historial P&L**.")
         return
 
     # ── Calcular retornos ─────────────────────────────────────────────────────
