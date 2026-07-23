@@ -5,9 +5,67 @@ Muestra precios, TIR, duration y tipos de cambio (CCL, MEP, Oficial, Blue).
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+import yfinance as yf
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import market_info as mi
+
+# ── Bonos argentinos con datos reales via yfinance ────────────────────────────
+BONOS_BYMA = {
+    # Bonos USD Ley Argentina
+    "AL29": {"nombre": "Bono Soberano USD Ley Arg 2029", "moneda": "USD", "tipo": "Soberano"},
+    "AL30": {"nombre": "Bono Soberano USD Ley Arg 2030", "moneda": "USD", "tipo": "Soberano"},
+    "AL35": {"nombre": "Bono Soberano USD Ley Arg 2035", "moneda": "USD", "tipo": "Soberano"},
+    "AL41": {"nombre": "Bono Soberano USD Ley Arg 2041", "moneda": "USD", "tipo": "Soberano"},
+    # Bonos USD Ley Nueva York
+    "GD29": {"nombre": "Bono Soberano USD Ley NY 2029",  "moneda": "USD", "tipo": "Soberano"},
+    "GD30": {"nombre": "Bono Soberano USD Ley NY 2030",  "moneda": "USD", "tipo": "Soberano"},
+    "GD35": {"nombre": "Bono Soberano USD Ley NY 2035",  "moneda": "USD", "tipo": "Soberano"},
+    "GD41": {"nombre": "Bono Soberano USD Ley NY 2041",  "moneda": "USD", "tipo": "Soberano"},
+    "GD38": {"nombre": "Bono Soberano USD Ley NY 2038",  "moneda": "USD", "tipo": "Soberano"},
+    # Bonos CER (ajustan por inflación)
+    "TX26": {"nombre": "Bono CER 2026",                  "moneda": "ARS", "tipo": "CER"},
+    "TX28": {"nombre": "Bono CER 2028",                  "moneda": "ARS", "tipo": "CER"},
+    "AE38": {"nombre": "Bono CER 2038",                  "moneda": "ARS", "tipo": "CER"},
+    "DICP": {"nombre": "Bono CER Descuento 2033",        "moneda": "ARS", "tipo": "CER"},
+    # LECAPs y Letras
+    "S31E5":{"nombre": "LECAP Enero 2025",               "moneda": "ARS", "tipo": "LECAP"},
+    "T15E7":{"nombre": "LECAP Enero 2027",               "moneda": "ARS", "tipo": "LECAP"},
+    "TMF28":{"nombre": "Bono Tesoro ARS 2028",           "moneda": "ARS", "tipo": "BONO ARS"},
+    "TZX28":{"nombre": "Bono CER 2028",                  "moneda": "ARS", "tipo": "CER"},
+}
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def obtener_bonos_yfinance() -> pd.DataFrame:
+    """
+    Obtiene precios de bonos argentinos desde Yahoo Finance usando sufijo .BA
+    Los bonos cotizan en BYMA con sus tickers + .BA
+    """
+    rows = []
+    for ticker, meta in BONOS_BYMA.items():
+        ticker_ba = ticker + ".BA"
+        precio = None
+        try:
+            info = yf.Ticker(ticker_ba).info
+            precio = info.get("currentPrice") or info.get("regularMarketPrice")
+            if precio and float(precio) < 0.01:
+                precio = None
+        except Exception:
+            pass
+
+        rows.append({
+            "Ticker":   ticker,
+            "Nombre":   meta["nombre"],
+            "Precio":   round(float(precio), 2) if precio else None,
+            "TIR":      None,   # No disponible via yfinance
+            "Duration": None,   # No disponible via yfinance
+            "Moneda":   meta["moneda"],
+            "Tipo":     meta["tipo"],
+            "Fuente":   "BYMA/yfinance" if precio else "Referencia",
+        })
+
+    df = pd.DataFrame(rows)
+    return df
 
 BG_DARK      = "#0f1117"
 BG_CARD      = "#1e2130"
@@ -103,8 +161,8 @@ def render():
         st.markdown("### 📊 Bonos Soberanos Argentinos")
         st.caption("Fuentes: ArgentinaDatos · BYMA Open Data")
 
-        with st.spinner("Obteniendo datos de bonos..."):
-            df_bonos = mi.obtener_bonos_argentina()
+        with st.spinner("Obteniendo precios de bonos desde BYMA..."):
+            df_bonos = obtener_bonos_yfinance()
 
         if df_bonos.empty:
             st.warning("No se pudieron obtener datos de bonos.")

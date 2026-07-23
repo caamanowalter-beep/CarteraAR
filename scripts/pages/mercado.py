@@ -379,11 +379,22 @@ def _seccion_ratings(info_dict: dict, ticker_sel: str = None):
         st.info("Sin ratings de analistas disponibles.")
         return
 
-    # Usar ticker seleccionado globalmente (fuera de los tabs)
-    if ticker_sel is None or ticker_sel not in acciones:
-        ticker_sel = list(acciones.keys())[0]
+    # Selector dentro del tab con on_change para persistir sin rerun
+    def _on_change_ratings():
+        st.session_state["_ticker_sel_val"] = st.session_state["_sel_ratings_tab"]
+
+    ticker_sel = st.selectbox(
+        "Seleccioná ticker",
+        list(acciones.keys()),
+        index=list(acciones.keys()).index(
+            st.session_state.get("_ticker_sel_val", list(acciones.keys())[0])
+            if st.session_state.get("_ticker_sel_val") in acciones else list(acciones.keys())[0]
+        ),
+        key="_sel_ratings_tab",
+        on_change=_on_change_ratings,
+        label_visibility="collapsed"
+    )
     info = acciones[ticker_sel]
-    st.caption(f"Mostrando ratings de: **{ticker_sel}**")
 
     # Resumen consenso
     rec   = _es(info.recomendacion_consenso) if info.recomendacion_consenso else "—"
@@ -445,11 +456,26 @@ def _seccion_ratings(info_dict: dict, ticker_sel: str = None):
 def _seccion_noticias(info_dict: dict, ticker_sel: str = None):
     """Noticias recientes con traducción completa o parcial al español. v2."""
 
-    # Usar ticker seleccionado globalmente (fuera de los tabs)
-    if ticker_sel is None or ticker_sel not in info_dict:
-        ticker_sel = list(info_dict.keys())[0]
+    # Selector dentro del tab con on_change para persistir sin rerun
+    acciones_n = [t for t, i in info_dict.items() if not i.es_etf]
+    if not acciones_n:
+        acciones_n = list(info_dict.keys())
+
+    def _on_change_noticias():
+        st.session_state["_ticker_sel_val"] = st.session_state["_sel_noticias_tab"]
+
+    ticker_sel = st.selectbox(
+        "Seleccioná ticker",
+        acciones_n,
+        index=acciones_n.index(
+            st.session_state.get("_ticker_sel_val", acciones_n[0])
+            if st.session_state.get("_ticker_sel_val") in acciones_n else acciones_n[0]
+        ),
+        key="_sel_noticias_tab",
+        on_change=_on_change_noticias,
+        label_visibility="collapsed"
+    )
     info = info_dict[ticker_sel]
-    st.caption(f"Mostrando noticias de: **{ticker_sel}**")
 
     if not info.noticias:
         st.info(f"Sin noticias disponibles para {ticker_sel}.")
@@ -674,27 +700,13 @@ def render():
     st.session_state[cache_key] = info_dict
     st.success(f"✅ Información obtenida para {len(info_dict)} tickers")
 
-    # ── Selector de ticker FUERA de los tabs ────────────────────────────────
-    # Clave: usar nombre distinto para key vs variable de session_state
+    # ── Selector de ticker para Ratings y Noticias ──────────────────────────
     acciones_lista = [t for t, i in info_dict.items() if not i.es_etf]
-
-    if acciones_lista:
-        # Usar "_ticker_sel_widget" como key del widget (distinto a la variable)
-        if "_ticker_sel_val" not in st.session_state or            st.session_state["_ticker_sel_val"] not in acciones_lista:
-            st.session_state["_ticker_sel_val"] = acciones_lista[0]
-
-        st.markdown("**🔍 Ticker para Ratings y Noticias:**")
-        ticker_global = st.selectbox(
-            "Ticker para Ratings y Noticias",
-            acciones_lista,
-            index=acciones_lista.index(st.session_state["_ticker_sel_val"]),
-            key="_ticker_sel_widget",
-            label_visibility="collapsed"
-        )
-        # Guardar en variable separada (no en el key del widget)
-        st.session_state["_ticker_sel_val"] = ticker_global
-    else:
-        ticker_global = None
+    # El ticker_global se pasa como parámetro a las funciones que lo necesitan
+    # Se inicializa en session_state y se actualiza via on_change
+    if "_ticker_sel_val" not in st.session_state or        st.session_state.get("_ticker_sel_val") not in acciones_lista:
+        st.session_state["_ticker_sel_val"] = acciones_lista[0] if acciones_lista else None
+    ticker_global = st.session_state.get("_ticker_sel_val")
 
     # ── Tabs ──────────────────────────────────────────────────────────────────
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
