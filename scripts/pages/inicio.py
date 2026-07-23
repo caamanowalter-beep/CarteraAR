@@ -98,7 +98,23 @@ def _grafico_ganancia_grupos(grupos: dict) -> go.Figure:
 
 
 def render():
-    st.title("🏠 Cartera AR — Dashboard")
+    # Header con logo
+    import os
+    logo_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logo_financieramente.png")
+    col_logo, col_titulo = st.columns([1, 5])
+    with col_logo:
+        if os.path.exists(logo_path):
+            st.image(logo_path, width=70)
+    with col_titulo:
+        st.markdown(
+            '<div style="padding-top:8px">'
+            '<span style="font-size:26px;font-weight:700;color:white">Cartera AR</span><br>'
+            '<a href="https://www.instagram.com/financieramente.ok?igsh=MTFkbDJwdDEzNWYzcA==" '
+            'target="_blank" style="color:#4f8ef7;font-size:13px;text-decoration:none">'
+            '📸 @financieramente.ok</a>'
+            '</div>',
+            unsafe_allow_html=True
+        )
 
     uid = _get_user_id()
     if uid and AUTH_OK and _auth.esta_logueado():

@@ -44,7 +44,20 @@ if AUTH_DISPONIBLE:
 
 # ── Navegación lateral ────────────────────────────────────────────────────────
 with st.sidebar:
-    st.title("📈 Cartera AR")
+    # Logo y nombre
+    import os
+    logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logo_financieramente.png")
+    if os.path.exists(logo_path):
+        st.image(logo_path, width=80)
+    st.markdown(
+        '<div style="text-align:left;margin-bottom:4px">'
+        '<span style="font-size:20px;font-weight:700;color:#e2e8f0">📈 Cartera AR</span><br>'
+        '<a href="https://www.instagram.com/financieramente.ok?igsh=MTFkbDJwdDEzNWYzcA==" '
+        'target="_blank" style="color:#4f8ef7;font-size:12px;text-decoration:none">'
+        '📸 @financieramente.ok</a>'
+        '</div>',
+        unsafe_allow_html=True
+    )
     st.markdown("---")
     pagina = st.radio(
         "Navegación",
@@ -59,7 +72,7 @@ with st.sidebar:
         label_visibility="collapsed"
     )
     st.markdown("---")
-    st.caption("v3.0 — Walter Caamaño")
+    st.caption("v3.0 — Financieramente.ok")
 
     if AUTH_DISPONIBLE:
         auth.render_usuario_sidebar()
