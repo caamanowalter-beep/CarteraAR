@@ -89,7 +89,8 @@ def guardar_snapshot(cartera_id: int, ccl: float) -> dict:
 
         return {"fecha": hoy, "valor_usd": valor_usd, "ganancia_pct": gan_pct}
     except Exception as e:
-        return {"error": str(e)}
+        import traceback
+        return {"error": str(e), "traceback": traceback.format_exc()}
 
 def listar_historial(cartera_id: int, dias: int = 365) -> pd.DataFrame:
     """Lista el historial de P&L de una cartera."""
@@ -305,6 +306,9 @@ def render():
                 res = guardar_snapshot(cartera_id, ccl)
                 if "error" in res:
                     st.error(f"❌ Error al guardar: {res['error']}")
+                    if "traceback" in res:
+                        with st.expander("Ver detalle del error"):
+                            st.code(res["traceback"])
                     st.info("💡 Ejecutá el SQL en Supabase para crear la tabla historial_pnl")
                 else:
                     st.success(f"✅ Snapshot guardado: ${res.get('valor_usd', 0):,.2f} USD ({res.get('fecha','')})")
