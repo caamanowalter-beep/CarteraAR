@@ -145,11 +145,24 @@ with st.sidebar:
         unsafe_allow_html=True
     )
     st.markdown("---")
-    _opciones = ["🏠 Inicio", "📊 Análisis de Cartera", "📈 Análisis Técnico",
-                 "🇦🇷 CEDEARs", "💼 Mi Cartera", "📈 Historial P&L",
-                 "🏆 vs Benchmark", "🔄 Señal de Rotación",
-                 "📰 Info de Mercado", "🏦 Bonos y ON",
-                 "🔔 Alertas y Notif."]
+    _opciones = [
+        # ── Dashboard ──
+        "🏠 Inicio",
+        # ── Mi Cartera ──
+        "💼 Mi Cartera",
+        "📈 Historial P&L",
+        "🔄 Señal de Rotación",
+        # ── Análisis ──
+        "📊 Análisis de Cartera",
+        "📈 Análisis Técnico",
+        "🏆 vs Benchmark",
+        # ── Mercado ──
+        "🇦🇷 CEDEARs",
+        "🏦 Bonos y ON",
+        "📰 Info de Mercado",
+        # ── Configuración ──
+        "🔔 Alertas y Notif.",
+    ]
     _idx = 0
     if "_pagina_actual" in st.session_state and st.session_state["_pagina_actual"] in _opciones:
         _idx = _opciones.index(st.session_state["_pagina_actual"])
