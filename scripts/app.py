@@ -148,7 +148,8 @@ with st.sidebar:
     _opciones = ["🏠 Inicio", "📊 Análisis de Cartera", "📈 Análisis Técnico",
                  "🇦🇷 CEDEARs", "💼 Mi Cartera", "📈 Historial P&L",
                  "🏆 vs Benchmark", "🔄 Señal de Rotación",
-                 "📰 Info de Mercado", "🏦 Bonos y ON"]
+                 "📰 Info de Mercado", "🏦 Bonos y ON",
+                 "🔔 Alertas y Notif."]
     _idx = 0
     if "_pagina_actual" in st.session_state and st.session_state["_pagina_actual"] in _opciones:
         _idx = _opciones.index(st.session_state["_pagina_actual"])
@@ -177,6 +178,7 @@ _PAGINAS = {
     "🏆 vs Benchmark":       "pages.benchmark",
     "🔄 Señal de Rotación":  "pages.rotacion",
     "📰 Info de Mercado":    "pages.mercado",
+    "🔔 Alertas y Notif.":   "pages.alertas_config",
     "🏦 Bonos y ON":         "pages.bonos",
 }
 
