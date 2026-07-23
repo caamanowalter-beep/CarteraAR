@@ -9,6 +9,31 @@ _DIR       = os.path.dirname(os.path.abspath(__file__))
 CACHE_JSON = os.path.join(_DIR, "data", "cedear_equivalencias.json")
 CACHE_TTL  = 7  # días
 
+# Mapa de tickers locales argentinos → ticker Yahoo Finance
+# Para acciones que cotizan en BCBA y se buscan con sufijo .BA
+TICKERS_LOCALES_BA = {
+    "BYMA":  "BYMA.BA",   # Bolsas y Mercados Argentinos
+    "GGAL":  "GGAL.BA",   # Galicia (también tiene ADR GGAL en NYSE)
+    "BMA":   "BMA.BA",    # Banco Macro (también tiene ADR BMA en NYSE)
+    "BBAR":  "BBAR.BA",   # BBVA Argentina
+    "SUPV":  "SUPV.BA",   # Supervielle
+    "CEPU":  "CEPU.BA",   # Central Puerto
+    "TGSU2": "TGSU2.BA",  # TGS
+    "YPFD":  "YPFD.BA",   # YPF local
+    "PAMP":  "PAMP.BA",   # Pampa Energía
+    "EDN":   "EDN.BA",    # Edenor
+    "IRSA":  "IRSA.BA",   # IRSA
+    "TECO2": "TECO2.BA",  # Telecom
+    "LOMA":  "LOMA.BA",   # Loma Negra
+    "ALUA":  "ALUA.BA",   # Aluar
+    "TXAR":  "TXARD.BA",  # Ternium Argentina
+    "COME":  "COME.BA",   # Soc. Comercial del Plata
+    "CRES":  "CRES.BA",   # Cresud
+    "AGRO":  "AGRO.BA",   # Agrometal
+    "HARG":  "HARG.BA",   # Holcim Argentina
+    "MIRG":  "MIRG.BA",   # Mirgor
+}
+
 EQUIVALENCIAS_CURADAS: dict[str, str | None] = {
     # Bancos
     "BMA":   "BMA",    # Banco Macro
@@ -117,31 +142,47 @@ def clasificar_ticker(ticker: str) -> str:
     t = ticker.upper()
     # Tickers con sufijo .BA son locales argentinos
     if t.endswith(".BA"):
-        return "Local sin ADR"
+        return "Local 🇦🇷"
+    # Tickers locales conocidos
+    if t in TICKERS_LOCALES_BA:
+        return "Local 🇦🇷"
     if t in INTERNACIONALES_DIRECTOS:
-        return "Internacional"
+        return "Internacional 🌎"
     if _MAPA.get(t) is not None:
-        return "ADR"
+        return "ADR 🇦🇷↔🌎"
     if t in _MAPA:
-        return "Local sin ADR"
-    return "Internacional"  # default
+        return "Local 🇦🇷"
+    return "Internacional 🌎"  # default
 
 
 def expandir_tickers(tickers: list[str]) -> tuple[list[str], list[str]]:
     exp, sin = [], []
     for t in tickers:
         u = t.upper()
+
+        # Si ya tiene sufijo .BA → es local, usar tal cual
+        if u.endswith(".BA"):
+            if u not in exp:
+                exp.append(u)
+            continue
+
+        # Si es acción local argentina → agregar versión .BA para Yahoo Finance
+        if u in TICKERS_LOCALES_BA:
+            ticker_ba = TICKERS_LOCALES_BA[u]
+            if ticker_ba not in exp:
+                exp.append(ticker_ba)
+            continue
+
         if u not in exp:
             exp.append(u)
-        # Tickers con sufijo .BA son locales — no tienen ADR
-        if u.endswith(".BA"):
-            continue
+
         if u in INTERNACIONALES_DIRECTOS:
             continue
+
         adr = get_adr(u)
         if adr and adr != u and adr not in exp:
             exp.append(adr)
-        elif adr is None and u not in INTERNACIONALES_DIRECTOS:
+        elif adr is None and u not in INTERNACIONALES_DIRECTOS and u not in TICKERS_LOCALES_BA:
             sin.append(u)
     return exp, sin
 
