@@ -469,6 +469,193 @@ def obtener_proximos_eventos(ticker: str, info: dict) -> list[ProximoEvento]:
 # 5. FUNCIÓN PRINCIPAL
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# NOTICIAS MULTI-FUENTE (Yahoo Finance + Bloomberg + Ámbito + La Nación + más)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+import xml.etree.ElementTree as _ET
+from datetime import datetime as _dt, timedelta as _td
+import re as _re
+
+# Fuentes RSS disponibles
+FUENTES_RSS = {
+    "yahoo":       "https://feeds.finance.yahoo.com/rss/2.0/headline?s={ticker}&region=US&lang=en-US",
+    "bloomberg":   "https://feeds.bloomberg.com/markets/news.rss",
+    "marketwatch": "https://feeds.marketwatch.com/marketwatch/topstories/",
+    "ambito_fin":  "https://www.ambito.com/rss/pages/finanzas.xml",
+    "ambito_mer":  "https://www.ambito.com/rss/pages/mercados.xml",
+    "lanacion":    "https://www.lanacion.com.ar/arc/outboundfeeds/rss/category/economia/",
+    "clarin":      "https://www.clarin.com/rss/economia/",
+    "iprofesional":"https://www.iprofesional.com/rss/finanzas",
+    "seekingalpha":"https://seekingalpha.com/market_currents.xml",
+}
+
+def _parsear_fecha_rss(fecha_str: str) -> _dt | None:
+    """Parsea fechas RSS en múltiples formatos."""
+    formatos = [
+        "%a, %d %b %Y %H:%M:%S %z",
+        "%a, %d %b %Y %H:%M:%S %Z",
+        "%Y-%m-%dT%H:%M:%S%z",
+        "%Y-%m-%dT%H:%M:%SZ",
+        "%a, %d %b %Y %H:%M:%S",
+    ]
+    for fmt in formatos:
+        try:
+            return _dt.strptime(fecha_str.strip(), fmt).replace(tzinfo=None)
+        except Exception:
+            pass
+    return None
+
+def _es_reciente(fecha_str: str, dias: int = 7) -> bool:
+    """Verifica si una noticia es de los últimos N días."""
+    if not fecha_str:
+        return True  # Sin fecha → incluir por defecto
+    dt = _parsear_fecha_rss(fecha_str)
+    if dt is None:
+        return True
+    limite = _dt.now() - _td(days=dias)
+    return dt >= limite
+
+def _fmt_fecha_noticia(fecha_str: str) -> str:
+    """Formatea fecha de noticia para mostrar."""
+    if not fecha_str:
+        return "—"
+    dt = _parsear_fecha_rss(fecha_str)
+    if dt is None:
+        return fecha_str[:16]
+    ahora = _dt.now()
+    diff = ahora - dt
+    if diff.days == 0:
+        horas = diff.seconds // 3600
+        if horas == 0:
+            mins = diff.seconds // 60
+            return f"Hace {mins} min"
+        return f"Hace {horas}h"
+    elif diff.days == 1:
+        return "Ayer"
+    elif diff.days < 7:
+        return f"Hace {diff.days} días"
+    return dt.strftime("%d/%m/%Y")
+
+def _contiene_ticker(texto: str, ticker: str) -> bool:
+    """Verifica si un texto menciona el ticker o empresa."""
+    ticker_clean = ticker.upper().replace(".BA", "")
+    # Mapeo ticker → nombre empresa para búsqueda
+    nombres = {
+        "AAPL": ["Apple", "AAPL"], "MSFT": ["Microsoft", "MSFT"],
+        "AMZN": ["Amazon", "AMZN"], "GOOGL": ["Google", "Alphabet", "GOOGL"],
+        "META": ["Meta", "Facebook", "META"], "NVDA": ["Nvidia", "NVDA"],
+        "TSLA": ["Tesla", "TSLA"], "MELI": ["MercadoLibre", "MELI"],
+        "SPY": ["S&P 500", "SPY", "S&P500"], "QQQ": ["Nasdaq", "QQQ", "NASDAQ"],
+        "YPFD": ["YPF", "YPFD"], "GGAL": ["Galicia", "GGAL"],
+        "BMA": ["Macro", "BMA"], "AL30": ["AL30", "bono"], "GD30": ["GD30"],
+    }
+    terminos = nombres.get(ticker_clean, [ticker_clean])
+    texto_lower = texto.lower()
+    return any(t.lower() in texto_lower for t in terminos)
+
+def obtener_noticias_multifuente(ticker: str, max_noticias: int = 8,
+                                  dias_max: int = 7) -> list[Noticia]:
+    """
+    Obtiene noticias de múltiples fuentes:
+    1. Yahoo Finance RSS (específico del ticker)
+    2. Bloomberg + MarketWatch (internacionales, filtradas por ticker)
+    3. Ámbito + La Nación + Clarín (argentinas, contexto local)
+    
+    Solo incluye noticias de los últimos `dias_max` días.
+    """
+    todas_noticias = []
+    vistas = set()  # Para deduplicar por título
+
+    def _parsear_rss(url: str, fuente_nombre: str,
+                     filtrar_ticker: bool = False) -> list[Noticia]:
+        """Parsea un feed RSS y retorna noticias recientes."""
+        noticias = []
+        try:
+            r = requests.get(url, timeout=8, headers={"User-Agent": "Mozilla/5.0"})
+            if r.status_code != 200:
+                return []
+            root = _ET.fromstring(r.content)
+            items = root.findall(".//item")
+            for item in items:
+                titulo   = (item.findtext("title") or "").strip()
+                link     = (item.findtext("link") or "").strip()
+                fecha_raw = (item.findtext("pubDate") or
+                             item.findtext("{http://purl.org/dc/elements/1.1/}date") or "")
+                desc     = (item.findtext("description") or "").strip()
+                desc     = _re.sub(r"<[^>]+>", "", desc)[:300]
+
+                # Filtrar por fecha (últimos N días)
+                if not _es_reciente(fecha_raw, dias_max):
+                    continue
+
+                # Filtrar por ticker si se requiere
+                if filtrar_ticker:
+                    texto_completo = f"{titulo} {desc}"
+                    if not _contiene_ticker(texto_completo, ticker):
+                        continue
+
+                # Deduplicar
+                titulo_key = titulo[:50].lower()
+                if titulo_key in vistas:
+                    continue
+                vistas.add(titulo_key)
+
+                noticias.append(Noticia(
+                    titulo=titulo,
+                    fuente=fuente_nombre,
+                    fecha=_fmt_fecha_noticia(fecha_raw),
+                    url=link,
+                    resumen=desc
+                ))
+        except Exception:
+            pass
+        return noticias
+
+    # 1. Yahoo Finance — específico del ticker (máxima relevancia)
+    yahoo_url = FUENTES_RSS["yahoo"].format(ticker=ticker)
+    noticias_yahoo = _parsear_rss(yahoo_url, "Yahoo Finance", filtrar_ticker=False)
+    todas_noticias.extend(noticias_yahoo[:max_noticias // 2])
+
+    # 2. Bloomberg + MarketWatch — internacionales filtradas por ticker
+    for fuente_key, fuente_nombre in [("bloomberg", "Bloomberg"),
+                                       ("marketwatch", "MarketWatch"),
+                                       ("seekingalpha", "Seeking Alpha")]:
+        noticias_int = _parsear_rss(FUENTES_RSS[fuente_key], fuente_nombre,
+                                     filtrar_ticker=True)
+        todas_noticias.extend(noticias_int[:2])
+
+    # 3. Fuentes argentinas — contexto local (sin filtro de ticker para CEDEARs/bonos)
+    es_activo_arg = any(x in ticker.upper() for x in
+                        ["YPFD", "GGAL", "BMA", "CEPU", "PAMP", "AL", "GD",
+                         "TX", "LOMA", "BYMA", "TECO", "EDN"])
+    if es_activo_arg:
+        for fuente_key, fuente_nombre in [("ambito_mer", "Ámbito Mercados"),
+                                           ("ambito_fin", "Ámbito Finanzas"),
+                                           ("lanacion", "La Nación"),
+                                           ("clarin", "Clarín"),
+                                           ("iprofesional", "iProfesional")]:
+            noticias_arg = _parsear_rss(FUENTES_RSS[fuente_key], fuente_nombre,
+                                         filtrar_ticker=True)
+            if not noticias_arg:
+                # Sin match de ticker → tomar las más recientes de contexto
+                noticias_arg = _parsear_rss(FUENTES_RSS[fuente_key], fuente_nombre,
+                                             filtrar_ticker=False)[:1]
+            todas_noticias.extend(noticias_arg[:2])
+    else:
+        # Para acciones internacionales → agregar contexto de mercado argentino
+        for fuente_key, fuente_nombre in [("ambito_mer", "Ámbito Mercados"),
+                                           ("lanacion", "La Nación")]:
+            noticias_arg = _parsear_rss(FUENTES_RSS[fuente_key], fuente_nombre,
+                                         filtrar_ticker=False)[:1]
+            todas_noticias.extend(noticias_arg)
+
+    # Ordenar por relevancia: Yahoo primero, luego por fuente
+    return todas_noticias[:max_noticias]
+
+
 def obtener_info_mercado(ticker: str,
                           max_noticias: int = 8,
                           incluir_ratings: bool = True) -> InfoMercado:
@@ -495,8 +682,12 @@ def obtener_info_mercado(ticker: str,
     quote_type    = info.get("quoteType", "")
     es_etf        = (quote_type == "ETF") or (ticker.upper() in ETF_INDICES)
 
-    # Noticias
-    noticias = obtener_noticias_yahoo(ticker, max_noticias)
+    # Noticias multi-fuente (Yahoo + Bloomberg + Ámbito + La Nación + más)
+    # Solo noticias de los últimos 7 días
+    noticias = obtener_noticias_multifuente(ticker, max_noticias, dias_max=7)
+    # Fallback a Yahoo si no hay noticias recientes
+    if not noticias:
+        noticias = obtener_noticias_yahoo(ticker, max_noticias)
 
     # Ratings y consenso (solo acciones)
     ratings  = []
