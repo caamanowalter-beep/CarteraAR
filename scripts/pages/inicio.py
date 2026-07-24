@@ -520,16 +520,15 @@ def render():
             col1, col2 = st.columns(2)
             with col1:
                 fig_comp = _grafico_composicion_total(grupos_con_datos)
-                st.plotly_chart(fig_comp, use_container_width=True)
+                st.plotly_chart(fig_comp, use_container_width=True, key="chart_comp_total")
             with col2:
                 fig_gan = _grafico_ganancia_grupos(grupos_con_datos)
                 if fig_gan:
-                    st.plotly_chart(fig_gan, use_container_width=True)
+                    st.plotly_chart(fig_gan, use_container_width=True, key="chart_gan_grupos")
                 else:
                     st.info("Sin datos de ganancia para graficar.")
 
         with tab_g2:
-            # Obtener df_pnl de la primera cartera con datos
             df_pnl_tab = pd.DataFrame()
             for cid in cartera_ids:
                 try:
@@ -540,8 +539,7 @@ def render():
                     pass
             fig_tipo = _grafico_composicion_tipo(df_pnl_tab)
             if fig_tipo:
-                st.plotly_chart(fig_tipo, use_container_width=True)
-                # Tabla resumen
+                st.plotly_chart(fig_tipo, use_container_width=True, key="chart_tipo")
                 if not df_pnl_tab.empty and "Tipo" in df_pnl_tab.columns:
                     resumen_tipo = df_pnl_tab.groupby("Tipo").agg(
                         Tickers=("Ticker", "count"),
@@ -556,7 +554,7 @@ def render():
         with tab_g3:
             fig_sector = _grafico_composicion_detallada(df_pnl_tab, ccl)
             if fig_sector:
-                st.plotly_chart(fig_sector, use_container_width=True)
+                st.plotly_chart(fig_sector, use_container_width=True, key="chart_sector")
                 st.caption("Los sectores se asignan automáticamente según el ticker. "
                            "Tickers no reconocidos aparecen como 'Otros'.")
             else:
@@ -565,7 +563,7 @@ def render():
         with tab_g4:
             fig_gan2 = _grafico_ganancia_grupos(grupos_con_datos)
             if fig_gan2:
-                st.plotly_chart(fig_gan2, use_container_width=True)
+                st.plotly_chart(fig_gan2, use_container_width=True, key="chart_ganancia")
             else:
                 st.info("Sin datos de ganancia para graficar.")
 
