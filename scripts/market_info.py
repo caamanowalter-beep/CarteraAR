@@ -359,10 +359,24 @@ def obtener_datos_etf(ticker: str, info: dict) -> Optional[DatosETF]:
     categoria    = info.get("category") or info.get("fundFamily") or "—"
     aum          = info.get("totalAssets")
     yield_anual  = info.get("yield") or info.get("dividendYield")
-    ret_ytd      = info.get("ytdReturn")
-    ret_1y       = info.get("oneYearReturn") or info.get("52WeekChange")
-    ret_3y       = info.get("threeYearAverageReturn")
-    ret_5y       = info.get("fiveYearAverageReturn")
+    def _normalizar_retorno(v):
+        """Normaliza retorno a porcentaje.
+        yfinance puede devolver:
+        - Decimal: 0.2019 → 20.19%  (multiplicar x100)
+        - Porcentaje: 20.19 → 20.19% (ya está bien)
+        Heurística: si |v| < 5, probablemente es decimal.
+        """
+        if v is None: return None
+        try:
+            v = float(v)
+            return v * 100 if abs(v) < 5 else v
+        except Exception:
+            return None
+
+    ret_ytd      = _normalizar_retorno(info.get("ytdReturn"))
+    ret_1y       = _normalizar_retorno(info.get("oneYearReturn") or info.get("52WeekChange"))
+    ret_3y       = _normalizar_retorno(info.get("threeYearAverageReturn"))
+    ret_5y       = _normalizar_retorno(info.get("fiveYearAverageReturn"))
     beta_3y      = info.get("beta3Year") or info.get("beta")
     num_holdings = info.get("holdings") or info.get("numberOfHoldings")
     indice       = ETF_INDICES.get(ticker.upper(), info.get("legalType", "—"))

@@ -236,13 +236,20 @@ def _grafico_etf_retornos(info_dict: dict) -> go.Figure | None:
     attrs      = ["retorno_ytd", "retorno_3y", "retorno_5y"]
     colors_bar = [COLOR_AZUL, COLOR_VERDE, COLOR_NARANJA]
 
+    def _norm_ret_grafico(v):
+        """Normaliza retorno para el gráfico."""
+        if v is None: return None
+        v = float(v)
+        return v * 100 if abs(v) < 5 else v
+
     for attr, label, color in zip(attrs, horizontes, colors_bar):
         vals    = []
         tickers = []
         for t, info in etfs.items():
             v = getattr(info.etf, attr, None)
-            if v is not None:
-                vals.append(round(float(v) * 100, 2))
+            v_norm = _norm_ret_grafico(v)
+            if v_norm is not None:
+                vals.append(round(v_norm, 2))
                 tickers.append(t)
         if vals:
             fig.add_trace(go.Bar(
@@ -530,8 +537,15 @@ def _seccion_etfs(info_dict: dict):
             c1, c2, c3, c4, c5 = st.columns(5)
             c1.metric("AUM", _fmt_monto(e.aum_usd) if e.aum_usd else "—")
             c2.metric("Yield anual", f"{e.yield_anual*100:.2f}%" if e.yield_anual else "—")
-            c3.metric("Ret. YTD",    f"{e.retorno_ytd*100:+.1f}%" if e.retorno_ytd else "—")
-            c4.metric("Ret. 3Y",     f"{e.retorno_3y*100:+.1f}%" if e.retorno_3y else "—")
+            # yfinance devuelve ytdReturn ya en % (ej: 20.19 = 20.19%), no multiplicar x100
+            def _fmt_ret(v):
+                if v is None: return "—"
+                # Si el valor es > 1, ya viene en % (ej: 20.19)
+                # Si es < 1, viene como decimal (ej: 0.2019) → multiplicar x100
+                pct = v if abs(v) > 1 else v * 100
+                return f"{pct:+.1f}%"
+            c3.metric("Ret. YTD",    _fmt_ret(e.retorno_ytd))
+            c4.metric("Ret. 3Y",     _fmt_ret(e.retorno_3y))
             c5.metric("Beta 3Y",     f"{e.beta_3y:.2f}" if e.beta_3y else "—")
 
             st.markdown(
