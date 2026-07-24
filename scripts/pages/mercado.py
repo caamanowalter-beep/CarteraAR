@@ -446,10 +446,31 @@ def _seccion_ratings(info_dict: dict, ticker_sel: str = None):
             })
 
         df_r = pd.DataFrame(rows)
+
+        # Ocultar columnas vacías (Precio objetivo y Upside si todos son "—")
+        cols_mostrar = ["Firma", "Acción", "Fecha"]
+        tiene_precio = any(r.precio_objetivo for r in info.ratings)
+        if tiene_precio:
+            cols_mostrar = ["Firma", "Acción", "Precio objetivo", "Upside", "Fecha"]
+
+        def color_accion(val):
+            v = str(val).lower()
+            if any(x in v for x in ["compra","mejora","superar","sobreponderar","inicio"]):
+                return "color: #00c896; font-weight: bold"
+            if any(x in v for x in ["vender","baja","subponderar","suspende"]):
+                return "color: #f74f4f; font-weight: bold"
+            return "color: #f7a34f"
+
         st.dataframe(
-            df_r.drop(columns=["_bg"]),
+            df_r[cols_mostrar].style.map(color_accion, subset=["Acción"]),
             hide_index=True, use_container_width=True
         )
+
+        if not tiene_precio:
+            st.caption(
+                "ℹ️ El precio objetivo individual por firma no está disponible en fuentes gratuitas. "
+                "El **precio objetivo consenso** (promedio de todos los analistas) se muestra arriba."
+            )
     else:
         st.info(f"Sin ratings detallados para {ticker_sel}.")
 
