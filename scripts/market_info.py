@@ -206,11 +206,16 @@ def obtener_noticias_yahoo(ticker: str, max_noticias: int = 8) -> list[Noticia]:
 # 2. RATINGS DE ANALISTAS — yfinance
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def obtener_ratings(ticker: str, max_ratings: int = 10) -> list[RatingAnalista]:
+def obtener_ratings(ticker: str, max_ratings: int = 10,
+                    meses_atras: int = 12) -> list[RatingAnalista]:
     """
     Obtiene el historial de ratings de analistas desde Yahoo Finance.
+    Filtra solo los últimos `meses_atras` meses para mostrar información relevante.
     Compatible con yfinance 0.2.x que usa upgrades_downgrades o recommendations.
     """
+    from datetime import datetime, timedelta
+    fecha_limite = datetime.now() - timedelta(days=meses_atras * 30)
+
     t = yf.Ticker(ticker)
     ratings = []
 
@@ -218,8 +223,16 @@ def obtener_ratings(ticker: str, max_ratings: int = 10) -> list[RatingAnalista]:
     try:
         df = t.upgrades_downgrades
         if df is not None and not df.empty:
-            df = df.sort_index(ascending=False).head(max_ratings)
-            for idx, row in df.iterrows():
+            # Filtrar últimos N meses
+            df = df.sort_index(ascending=False)
+            df_filtrado = df[df.index >= fecha_limite]
+            # Si no hay datos recientes, tomar los últimos disponibles
+            if df_filtrado.empty:
+                df_filtrado = df.head(max_ratings)
+            else:
+                df_filtrado = df_filtrado.head(max_ratings)
+
+            for idx, row in df_filtrado.iterrows():
                 fecha = idx.strftime("%d/%m/%Y") if hasattr(idx, "strftime") else str(idx)[:10]
                 firma  = str(row.get("Firm", "—")).strip()
                 accion = str(row.get("ToGrade", row.get("Action", "—"))).strip()
