@@ -12,6 +12,17 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import cartera_db
 import core
 
+try:
+    import auth as _auth
+    AUTH_OK = True
+except Exception:
+    AUTH_OK = False
+
+def _get_user_id():
+    if AUTH_OK and _auth.esta_logueado():
+        return _auth.get_user_id()
+    return None
+
 BG_DARK      = "#0f1117"
 BG_CARD      = "#1e2130"
 COLOR_VERDE  = "#00c896"
@@ -144,7 +155,8 @@ def _tab_gestionar_carteras():
         if st.form_submit_button("✅ Crear cartera", type="primary",
                                   use_container_width=True):
             if nombre.strip():
-                cid = cartera_db.crear_cartera(nombre, descripcion, moneda)
+                cid = cartera_db.crear_cartera(nombre, descripcion, moneda,
+                                               usuario_id=_get_user_id())
                 if cid > 0:
                     st.success(f"✅ Cartera '{nombre}' creada.")
                     st.rerun()
