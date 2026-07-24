@@ -70,6 +70,157 @@ def _grafico_composicion_total(grupos: dict) -> go.Figure:
     )
     return fig
 
+
+def _grafico_composicion_detallada(df_pnl: pd.DataFrame, ccl: float) -> go.Figure:
+    """
+    Gráfico de torta detallado separando:
+    - Acciones internacionales vs CEDEARs
+    - Por sector (Tecnología, Consumo, Energía, ETFs, etc.)
+    """
+    if df_pnl.empty:
+        return None
+
+    # Mapeo de tickers a sector
+    SECTORES = {
+        # Tecnología
+        "AAPL":"Tecnología","MSFT":"Tecnología","NVDA":"Tecnología",
+        "GOOGL":"Tecnología","META":"Tecnología","AMZN":"Tecnología",
+        "AMD":"Tecnología","INTC":"Tecnología","IBM":"Tecnología",
+        "MU":"Tecnología","TSLA":"Tecnología","ANET":"Tecnología",
+        "CRWD":"Tecnología","PLTR":"Tecnología",
+        # Consumo masivo
+        "KO":"Consumo masivo","MCD":"Consumo masivo","PEP":"Consumo masivo",
+        "WMT":"Consumo masivo","COST":"Consumo masivo","PG":"Consumo masivo",
+        # Finanzas
+        "V":"Finanzas","MA":"Finanzas","JPM":"Finanzas","BAC":"Finanzas",
+        "GS":"Finanzas","MS":"Finanzas","BRK-B":"Finanzas",
+        "GGAL":"Finanzas AR","BMA":"Finanzas AR","BBAR":"Finanzas AR",
+        "SUPV":"Finanzas AR","BYMA":"Finanzas AR",
+        # Energía
+        "XLE":"ETF Energía","CVX":"Energía","XOM":"Energía",
+        "YPFD":"Energía AR","PAMP":"Energía AR","CEPU":"Energía AR",
+        "TGSU2":"Energía AR","EDN":"Energía AR",
+        # ETFs
+        "SPY":"ETF Mercado","QQQ":"ETF Mercado","DIA":"ETF Mercado",
+        "IWM":"ETF Mercado","XLF":"ETF Finanzas","XLP":"ETF Consumo",
+        "XLV":"ETF Salud","XLC":"ETF Comunicación","XLK":"ETF Tecnología",
+        "IBIT":"ETF Cripto","URA":"ETF Uranio","ARKK":"ETF Innovación",
+        # Salud
+        "JNJ":"Salud","PFE":"Salud","MRK":"Salud","ABBV":"Salud",
+        # Materiales/Industria
+        "RIO":"Materiales","LOMA":"Materiales AR","ALUA":"Materiales AR",
+        # Comunicación
+        "MELI":"Comunicación","VIST":"Energía AR","NU":"Finanzas",
+        "DISN":"Entretenimiento","DIS":"Entretenimiento",
+        # Otros argentinos
+        "TECO2":"Telecom AR","IRSA":"Real Estate AR",
+    }
+
+    COLORES_SECTOR = {
+        "Tecnología":       "#4f8ef7",
+        "Consumo masivo":   "#f7a34f",
+        "Finanzas":         "#00c896",
+        "Finanzas AR":      "#1abc9c",
+        "Energía":          "#e74c3c",
+        "Energía AR":       "#c0392b",
+        "ETF Mercado":      "#9b59b6",
+        "ETF Finanzas":     "#8e44ad",
+        "ETF Consumo":      "#d35400",
+        "ETF Salud":        "#27ae60",
+        "ETF Tecnología":   "#2980b9",
+        "ETF Cripto":       "#f39c12",
+        "ETF Uranio":       "#7f8c8d",
+        "ETF Innovación":   "#16a085",
+        "ETF Comunicación": "#2c3e50",
+        "Salud":            "#2ecc71",
+        "Materiales":       "#95a5a6",
+        "Materiales AR":    "#7f8c8d",
+        "Comunicación":     "#3498db",
+        "Entretenimiento":  "#e67e22",
+        "Telecom AR":       "#1abc9c",
+        "Real Estate AR":   "#e74c3c",
+        "Otros":            "#bdc3c7",
+    }
+
+    # Agrupar por sector
+    sectores_valor = {}
+    for _, row in df_pnl.iterrows():
+        ticker = str(row.get("Ticker", "")).upper().replace(".BA", "")
+        valor  = float(row.get("Valor actual (USD)") or 0)
+        if valor <= 0:
+            continue
+        sector = SECTORES.get(ticker, "Otros")
+        sectores_valor[sector] = sectores_valor.get(sector, 0) + valor
+
+    if not sectores_valor:
+        return None
+
+    # Ordenar por valor
+    sectores_sorted = sorted(sectores_valor.items(), key=lambda x: x[1], reverse=True)
+    labels = [s[0] for s in sectores_sorted]
+    values = [s[1] for s in sectores_sorted]
+    colors = [COLORES_SECTOR.get(l, "#bdc3c7") for l in labels]
+
+    fig = go.Figure(go.Pie(
+        labels=labels, values=values,
+        hole=0.4,
+        marker_colors=colors,
+        textinfo="label+percent",
+        hovertemplate="<b>%{label}</b><br>$%{value:,.2f} USD<br>%{percent}<extra></extra>"
+    ))
+    fig.update_layout(
+        title="Composición por sector",
+        plot_bgcolor=BG_DARK, paper_bgcolor=BG_CARD,
+        font=dict(color="white"), height=CHART_HEIGHT,
+        legend=dict(bgcolor=BG_CARD, font=dict(size=10)),
+        margin=dict(t=50, b=20, l=20, r=20)
+    )
+    return fig
+
+
+def _grafico_composicion_tipo(df_pnl: pd.DataFrame) -> go.Figure:
+    """
+    Gráfico separando Acciones internacionales vs CEDEARs.
+    """
+    if df_pnl.empty:
+        return None
+
+    tipo_valor = {}
+    for _, row in df_pnl.iterrows():
+        tipo  = str(row.get("Tipo", "Internacional 🌎"))
+        valor = float(row.get("Valor actual (USD)") or 0)
+        if valor <= 0:
+            continue
+        # Simplificar etiqueta
+        if "CEDEAR" in tipo or "Local" in tipo or "🇦🇷" in tipo:
+            key = "CEDEARs 🇦🇷"
+        else:
+            key = "Acciones 🌎"
+        tipo_valor[key] = tipo_valor.get(key, 0) + valor
+
+    if not tipo_valor:
+        return None
+
+    labels = list(tipo_valor.keys())
+    values = list(tipo_valor.values())
+    colors = [COLOR_AZUL if "🌎" in l else COLOR_VERDE for l in labels]
+
+    fig = go.Figure(go.Pie(
+        labels=labels, values=values,
+        hole=0.4,
+        marker_colors=colors,
+        textinfo="label+percent",
+        hovertemplate="<b>%{label}</b><br>$%{value:,.2f} USD<br>%{percent}<extra></extra>"
+    ))
+    fig.update_layout(
+        title="Acciones vs CEDEARs",
+        plot_bgcolor=BG_DARK, paper_bgcolor=BG_CARD,
+        font=dict(color="white"), height=CHART_HEIGHT,
+        legend=dict(bgcolor=BG_CARD),
+        margin=dict(t=50, b=20, l=20, r=20)
+    )
+    return fig
+
 def _grafico_ganancia_grupos(grupos: dict) -> go.Figure:
     """Gráfico de barras con ganancia % por grupo."""
     labels, ganancias, colors = [], [], []
@@ -358,16 +509,63 @@ def render():
                     unsafe_allow_html=True
                 )
 
-        # Gráficos
+        # Gráficos — tabs para diferentes vistas
         st.markdown("---")
-        col1, col2 = st.columns(2)
-        with col1:
-            fig_comp = _grafico_composicion_total(grupos_con_datos)
-            st.plotly_chart(fig_comp, use_container_width=True)
-        with col2:
-            fig_gan = _grafico_ganancia_grupos(grupos_con_datos)
-            if fig_gan:
-                st.plotly_chart(fig_gan, use_container_width=True)
+        tab_g1, tab_g2, tab_g3, tab_g4 = st.tabs([
+            "📊 Por grupo", "🌎 Acciones vs CEDEARs",
+            "🏭 Por sector", "📈 Ganancia %"
+        ])
+
+        with tab_g1:
+            col1, col2 = st.columns(2)
+            with col1:
+                fig_comp = _grafico_composicion_total(grupos_con_datos)
+                st.plotly_chart(fig_comp, use_container_width=True)
+            with col2:
+                fig_gan = _grafico_ganancia_grupos(grupos_con_datos)
+                if fig_gan:
+                    st.plotly_chart(fig_gan, use_container_width=True)
+                else:
+                    st.info("Sin datos de ganancia para graficar.")
+
+        with tab_g2:
+            # Obtener df_pnl de la primera cartera con datos
+            df_pnl_tab = pd.DataFrame()
+            for cid in cartera_ids:
+                try:
+                    _df = cartera_db.calcular_pnl(cid, ccl=ccl)
+                    if not _df.empty:
+                        df_pnl_tab = pd.concat([df_pnl_tab, _df], ignore_index=True)
+                except Exception:
+                    pass
+            fig_tipo = _grafico_composicion_tipo(df_pnl_tab)
+            if fig_tipo:
+                st.plotly_chart(fig_tipo, use_container_width=True)
+                # Tabla resumen
+                if not df_pnl_tab.empty and "Tipo" in df_pnl_tab.columns:
+                    resumen_tipo = df_pnl_tab.groupby("Tipo").agg(
+                        Tickers=("Ticker", "count"),
+                        Valor_USD=("Valor actual (USD)", "sum"),
+                        Ganancia_USD=("Ganancia (USD)", "sum")
+                    ).round(2).reset_index()
+                    resumen_tipo.columns = ["Tipo", "Tickers", "Valor (USD)", "Ganancia (USD)"]
+                    st.dataframe(resumen_tipo, use_container_width=True, hide_index=True)
+            else:
+                st.info("Sin datos suficientes para este gráfico.")
+
+        with tab_g3:
+            fig_sector = _grafico_composicion_detallada(df_pnl_tab, ccl)
+            if fig_sector:
+                st.plotly_chart(fig_sector, use_container_width=True)
+                st.caption("Los sectores se asignan automáticamente según el ticker. "
+                           "Tickers no reconocidos aparecen como 'Otros'.")
+            else:
+                st.info("Sin datos suficientes para este gráfico.")
+
+        with tab_g4:
+            fig_gan2 = _grafico_ganancia_grupos(grupos_con_datos)
+            if fig_gan2:
+                st.plotly_chart(fig_gan2, use_container_width=True)
             else:
                 st.info("Sin datos de ganancia para graficar.")
 
