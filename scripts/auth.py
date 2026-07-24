@@ -196,6 +196,164 @@ def cerrar_sesion() -> None:
 BG_CARD  = "#1e2130"
 COLOR_AZUL = "#4f8ef7"
 
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# RECUPERACIÓN DE CONTRASEÑA
+# ═══════════════════════════════════════════════════════════════════════════════
+
+import secrets as _secrets_mod
+import hashlib as _hashlib_mod
+
+def generar_token_reset(email: str) -> tuple[bool, str]:
+    """
+    Genera un token de recuperación de contraseña y lo guarda en la DB.
+    Retorna (éxito, token | mensaje_error).
+    """
+    email = email.strip().lower()
+    df = _read_sql("SELECT id FROM usuarios WHERE email=? AND activo=1", [email])
+    if df.empty:
+        return False, "No existe una cuenta con ese email."
+
+    token = _secrets_mod.token_urlsafe(32)
+    expira = (datetime.now() + __import__('datetime').timedelta(hours=1)).strftime("%Y-%m-%d %H:%M")
+
+    try:
+        # Guardar token en tabla (crear si no existe)
+        _execute("""
+            INSERT INTO reset_tokens (email, token, expira, usado)
+            VALUES (?, ?, ?, 0)
+            ON CONFLICT(email) DO UPDATE SET
+                token=excluded.token, expira=excluded.expira, usado=0
+        """, (email, token, expira))
+        return True, token
+    except Exception as e:
+        # Si la tabla no existe, crearla
+        try:
+            _init_reset_tokens_table()
+            _execute("""
+                INSERT INTO reset_tokens (email, token, expira, usado)
+                VALUES (?, ?, ?, 0)
+                ON CONFLICT(email) DO UPDATE SET
+                    token=excluded.token, expira=excluded.expira, usado=0
+            """, (email, token, expira))
+            return True, token
+        except Exception as e2:
+            return False, str(e2)
+
+def _init_reset_tokens_table():
+    """Crea la tabla de tokens de reset si no existe."""
+    con = _get_connection()
+    cur = con.cursor()
+    pk = "SERIAL" if USE_POSTGRES else "INTEGER"
+    ai = "" if USE_POSTGRES else "AUTOINCREMENT"
+    try:
+        cur.execute(f"""CREATE TABLE IF NOT EXISTS reset_tokens (
+            id      {pk} PRIMARY KEY {ai},
+            email   TEXT NOT NULL UNIQUE,
+            token   TEXT NOT NULL,
+            expira  TEXT NOT NULL,
+            usado   INTEGER NOT NULL DEFAULT 0
+        )""")
+        con.commit()
+    except Exception:
+        pass
+    finally:
+        con.close()
+
+def verificar_token_reset(token: str) -> tuple[bool, str]:
+    """
+    Verifica si un token de reset es válido.
+    Retorna (válido, email | mensaje_error).
+    """
+    try:
+        df = _read_sql("SELECT email, expira, usado FROM reset_tokens WHERE token=?", [token])
+        if df.empty:
+            return False, "Token inválido o expirado."
+        row = df.iloc[0]
+        if int(row["usado"]):
+            return False, "Este link ya fue utilizado."
+        expira = datetime.strptime(str(row["expira"]), "%Y-%m-%d %H:%M")
+        if datetime.now() > expira:
+            return False, "El link expiró. Solicitá uno nuevo."
+        return True, str(row["email"])
+    except Exception as e:
+        return False, str(e)
+
+def resetear_password_con_token(token: str, nueva_password: str) -> tuple[bool, str]:
+    """
+    Resetea la contraseña usando un token válido.
+    """
+    if len(nueva_password) < 6:
+        return False, "La contraseña debe tener al menos 6 caracteres."
+
+    ok, resultado = verificar_token_reset(token)
+    if not ok:
+        return False, resultado
+
+    email = resultado
+    pwd_hash, salt = _hash_password(nueva_password)
+
+    try:
+        _execute("UPDATE usuarios SET password_hash=?, salt=? WHERE email=?",
+                 (pwd_hash, salt, email))
+        _execute("UPDATE reset_tokens SET usado=1 WHERE token=?", (token,))
+        return True, f"Contraseña actualizada para {email}"
+    except Exception as e:
+        return False, str(e)
+
+def enviar_email_reset(email: str, token: str, app_url: str = "https://cartera-ar.streamlit.app") -> tuple[bool, str]:
+    """
+    Envía el email de recuperación de contraseña.
+    Usa Gmail SMTP si está configurado, sino muestra el link directamente.
+    """
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+
+    link = f"{app_url}?reset_token={token}"
+    asunto = "🔑 Cartera AR — Recuperación de contraseña"
+    cuerpo_html = f"""
+    <html><body style="font-family:Arial,sans-serif;background:#0f1117;color:#e2e8f0;padding:20px">
+    <div style="max-width:500px;margin:0 auto;background:#1e2130;border-radius:10px;padding:20px">
+    <h2 style="color:#4f8ef7">🔑 Recuperación de contraseña</h2>
+    <p>Recibiste este email porque solicitaste restablecer tu contraseña en <b>Cartera AR</b>.</p>
+    <p>Hacé click en el botón para crear una nueva contraseña:</p>
+    <a href="{link}" style="display:inline-block;background:#4f8ef7;color:#fff;padding:12px 24px;
+       border-radius:8px;text-decoration:none;font-weight:bold;margin:16px 0">
+       🔑 Restablecer contraseña
+    </a>
+    <p style="color:#888;font-size:12px">Este link expira en 1 hora.<br>
+    Si no solicitaste esto, ignorá este email.</p>
+    <hr style="border-color:#2d3748">
+    <p style="color:#888;font-size:11px">Cartera AR v3.0 — Financieramente.ok</p>
+    </div></body></html>
+    """
+
+    # Intentar obtener config de email del primer usuario admin
+    try:
+        df_config = _read_sql(
+            "SELECT email_smtp_user, email_smtp_pass FROM config_notificaciones LIMIT 1"
+        )
+        if not df_config.empty and df_config.iloc[0]["email_smtp_user"]:
+            smtp_user = str(df_config.iloc[0]["email_smtp_user"])
+            smtp_pass = str(df_config.iloc[0]["email_smtp_pass"])
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = asunto
+            msg["From"]    = smtp_user
+            msg["To"]      = email
+            msg.attach(MIMEText(cuerpo_html, "html", "utf-8"))
+            with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+                server.login(smtp_user, smtp_pass)
+                server.sendmail(smtp_user, email, msg.as_string())
+            return True, f"Email enviado a {email}"
+    except Exception:
+        pass
+
+    # Fallback: retornar el link para mostrarlo en pantalla
+    return False, link
+
+
 def render_login() -> None:
     """
     Muestra la pantalla de login/registro.
@@ -213,7 +371,7 @@ def render_login() -> None:
         unsafe_allow_html=True
     )
 
-    tab_login, tab_registro = st.tabs(["🔐 Iniciar sesión", "📝 Crear cuenta"])
+    tab_login, tab_registro, tab_reset = st.tabs(["🔐 Iniciar sesión", "📝 Crear cuenta", "🔑 Olvidé mi contraseña"])
 
     with tab_login:
         with st.form("form_login", clear_on_submit=False):
@@ -252,6 +410,62 @@ def render_login() -> None:
                         st.success(msg)
                     else:
                         st.error(f"❌ {msg}")
+
+    with tab_reset:
+        st.markdown("#### 🔑 Recuperar contraseña")
+        st.info("Ingresá tu email y te enviaremos un link para restablecer tu contraseña.")
+
+        # Verificar si hay token en la URL
+        try:
+            params = st.query_params
+            token_url = params.get("reset_token")
+        except Exception:
+            token_url = None
+
+        if token_url:
+            # Formulario para nueva contraseña
+            st.success("✅ Link válido. Ingresá tu nueva contraseña.")
+            with st.form("form_nueva_pass"):
+                nueva_pass = st.text_input("Nueva contraseña", type="password")
+                confirmar  = st.text_input("Confirmar contraseña", type="password")
+                if st.form_submit_button("✅ Cambiar contraseña", type="primary", use_container_width=True):
+                    if nueva_pass != confirmar:
+                        st.error("❌ Las contraseñas no coinciden.")
+                    else:
+                        ok, msg = resetear_password_con_token(token_url, nueva_pass)
+                        if ok:
+                            st.success(f"✅ {msg}. Ya podés iniciar sesión.")
+                            # Limpiar token de la URL
+                            try:
+                                st.query_params.clear()
+                            except Exception:
+                                pass
+                        else:
+                            st.error(f"❌ {msg}")
+        else:
+            # Formulario para solicitar reset
+            with st.form("form_reset_pass", clear_on_submit=True):
+                email_reset = st.text_input("Tu email", placeholder="tu@gmail.com")
+                submitted = st.form_submit_button("📧 Enviar link de recuperación",
+                                                   type="primary", use_container_width=True)
+                if submitted:
+                    if not email_reset or "@" not in email_reset:
+                        st.error("❌ Ingresá un email válido.")
+                    else:
+                        ok_token, resultado = generar_token_reset(email_reset.strip().lower())
+                        if not ok_token:
+                            st.error(f"❌ {resultado}")
+                        else:
+                            token_generado = resultado
+                            ok_email, msg_email = enviar_email_reset(email_reset, token_generado)
+                            if ok_email:
+                                st.success(f"✅ Email enviado a {email_reset}. Revisá tu bandeja.")
+                            else:
+                                # Fallback: mostrar link directamente
+                                st.warning("⚠️ No se pudo enviar el email automáticamente.")
+                                st.info("Copiá este link y pegalo en tu navegador:")
+                                st.code(msg_email)
+                                st.caption("El link expira en 1 hora.")
 
     st.markdown("</div>", unsafe_allow_html=True)
 
