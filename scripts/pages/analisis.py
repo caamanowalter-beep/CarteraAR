@@ -37,13 +37,14 @@ def _grafico_frontera(mk: dict) -> go.Figure:
     fe = core.frontera_eficiente(mk, n_puntos=150)
     fig = go.Figure()
 
-    # Frontera eficiente
-    fig.add_trace(go.Scatter(
-        x=fe["Volatilidad"], y=fe["Retorno"],
-        mode="lines", name="Frontera eficiente",
-        line=dict(color=COLOR_AZUL, width=2),
-        hovertemplate="Vol: %{x:.2%}<br>Ret: %{y:.2%}<extra></extra>"
-    ))
+    # Frontera eficiente (solo si hay datos validos)
+    if not fe.empty and "Volatilidad" in fe.columns and "Retorno" in fe.columns:
+        fig.add_trace(go.Scatter(
+            x=fe["Volatilidad"], y=fe["Retorno"],
+            mode="lines", name="Frontera eficiente",
+            line=dict(color=COLOR_AZUL, width=2),
+            hovertemplate="Vol: %{x:.2%}<br>Ret: %{y:.2%}<extra></extra>"
+        ))
 
     # Portafolios óptimos
     for label, w, color in [
