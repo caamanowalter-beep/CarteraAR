@@ -450,7 +450,7 @@ def listar_movimientos(cartera_id: int, ticker: str = None) -> pd.DataFrame:
         [cartera_id]
     )
 
-def listar_ganancias_realizadas(cartera_id: int) -> pd.DataFrame:
+
     return _read_sql(
         "SELECT * FROM ganancias_realizadas WHERE cartera_id=? ORDER BY fecha_venta DESC",
         [cartera_id]

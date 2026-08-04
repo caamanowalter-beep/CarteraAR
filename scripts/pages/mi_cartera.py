@@ -9,21 +9,7 @@ import plotly.express as px
 from datetime import date
 import io, os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import cartera_db
-import core
 
-try:
-    import auth as _auth
-    AUTH_OK = True
-except Exception:
-    AUTH_OK = False
-
-def _get_user_id():
-    if AUTH_OK and _auth.esta_logueado():
-        return _auth.get_user_id()
-    return None
-
-BG_DARK      = "#0f1117"
 BG_CARD      = "#1e2130"
 COLOR_VERDE  = "#00c896"
 COLOR_ROJO   = "#f74f4f"
@@ -167,6 +153,7 @@ def _tab_gestionar_carteras():
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # TAB: AGREGAR POSICIÓN
+# ═══════════════════════════════════════════════════════════════════════════════
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def _tab_agregar_posicion(cartera_id: int, nombre: str):
@@ -453,25 +440,76 @@ def _tab_movimientos(cartera_id: int, nombre: str):
                 except Exception as e:
                     st.error(f"❌ Error: {e}")
 
-    # Historial de movimientos
+    
+
+    # ── Historial de movimientos con botón eliminar ──────────────────────────
     st.markdown("---")
     st.markdown("#### 📋 Historial de movimientos")
     df_mov = cartera_db.listar_movimientos(cartera_id)
     if not df_mov.empty:
-        def color_tipo(val):
-            return "color: #00c896" if val == "COMPRA" else "color: #f74f4f"
-        st.dataframe(
-            df_mov[["fecha","tipo","ticker","cantidad","precio",
-                    "moneda","comision","notas"]].style
-                .map(color_tipo, subset=["tipo"])
-                .format({
-                    "precio":   "${:,.2f}",
-                    "comision": "${:,.2f}",
-                }),
-            use_container_width=True, hide_index=True
-        )
+        key_confirm = f"confirm_del_mov_{cartera_id}"
+        if key_confirm not in st.session_state:
+            st.session_state[key_confirm] = None
+
+        st.caption("Hacé clic en 🗑️ para eliminar un movimiento. Se te pedirá confirmación.")
+
+        for _, row in df_mov.iterrows():
+            mov_id = int(row["id"]) if "id" in row.index else None
+            tipo_color = "#00c896" if row["tipo"] == "COMPRA" else "#f74f4f"
+            precio_fmt = f"${row['precio']:,.2f}" if pd.notna(row['precio']) else "—"
+            comision_fmt = f"${row.get('comision', 0):,.2f}" if pd.notna(row.get('comision', 0)) else "$0.00"
+            notas_txt = str(row.get("notas", "") or "")
+
+            col_info, col_btn = st.columns([11, 1])
+            with col_info:
+                st.markdown(
+                    f'<div style="background:#1e2130;padding:8px 12px;border-radius:8px;'
+                    f'border-left:3px solid {tipo_color};margin-bottom:4px;font-size:13px">'
+                    f'<span style="color:{tipo_color};font-weight:700">{row["tipo"]}</span>'
+                    f'&nbsp;&nbsp;<span style="color:white;font-weight:600">{row["ticker"]}</span>'
+                    f'&nbsp;&nbsp;<span style="color:#aaa">{row["fecha"]}</span>'
+                    f'&nbsp;&nbsp;Cant: <span style="color:white">{row["cantidad"]}</span>'
+                    f'&nbsp;&nbsp;Precio: <span style="color:white">{precio_fmt}</span>'
+                    f'&nbsp;&nbsp;<span style="color:#aaa">{row.get("moneda","")}</span>'
+                    f'&nbsp;&nbsp;Comisión: <span style="color:#aaa">{comision_fmt}</span>'
+                    + (f'&nbsp;&nbsp;<span style="color:#aaa;font-style:italic">{notas_txt}</span>' if notas_txt else '')
+                    + '</div>',
+                    unsafe_allow_html=True
+                )
+            with col_btn:
+                if mov_id is not None:
+                    if st.button("🗑️", key=f"del_mov_{mov_id}_{cartera_id}",
+                                 help="Eliminar este movimiento"):
+                        st.session_state[key_confirm] = mov_id
+
+        if st.session_state[key_confirm] is not None:
+            mid = st.session_state[key_confirm]
+            row_del = df_mov[df_mov["id"] == mid].iloc[0] if "id" in df_mov.columns and not df_mov[df_mov["id"] == mid].empty else None
+            if row_del is not None:
+                st.warning(
+                    f"⚠️ Confirmas eliminar: **{row_del['tipo']}** "
+                    f"**{row_del['ticker']}** — {row_del['cantidad']} unidades "
+                    f"@ ${row_del['precio']:,.2f} del {row_del['fecha']}?"
+                )
+            else:
+                st.warning(f"⚠️ Confirmas eliminar el movimiento ID={mid}?")
+            c_si, c_no = st.columns(2)
+            if c_si.button("✅ Sí, eliminar", key=f"confirm_si_{mid}_{cartera_id}",
+                           type="primary", use_container_width=True):
+                try:
+                    cartera_db.eliminar_movimiento(mid)
+                    st.session_state[key_confirm] = None
+                    st.success("✅ Movimiento eliminado.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Error al eliminar: {e}")
+            if c_no.button("❌ Cancelar", key=f"confirm_no_{mid}_{cartera_id}",
+                           use_container_width=True):
+                st.session_state[key_confirm] = None
+                st.rerun()
     else:
         st.info("Sin movimientos registrados todavía.")
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # TAB: IMPORTAR CSV/EXCEL
