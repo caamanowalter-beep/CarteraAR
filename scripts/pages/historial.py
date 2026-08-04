@@ -34,15 +34,14 @@ COLOR_NARANJA= "#f7a34f"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # FUNCIONES DE HISTORIAL
-# ═══════════════════════════════════════════════════════════════════════════════
 
 def guardar_snapshot(cartera_id: int, ccl: float) -> dict:
     """
     Guarda un snapshot del valor actual de la cartera en la tabla historial_pnl.
+    Si Yahoo Finance falla, usa el último valor conocido como fallback.
     Retorna el resumen guardado.
     """
     try:
-        # Asegurar que la tabla existe antes de insertar
         init_historial_db()
         df_pnl = cartera_db.calcular_pnl(cartera_id, ccl=ccl)
         res    = cartera_db.resumen_cartera(df_pnl)
@@ -52,6 +51,23 @@ def guardar_snapshot(cartera_id: int, ccl: float) -> dict:
         gan_usd   = res.get("Ganancia total (USD)", 0) or 0
         gan_pct   = res.get("Ganancia total (%)", 0) or 0
         n_pos     = res.get("Posiciones", 0) or 0
+
+        # Fallback: si valor_usd es 0 (Yahoo Finance bloqueado), usar último snapshot
+        if valor_usd == 0:
+            try:
+                df_ult = cartera_db._read_sql(
+                    "SELECT valor_usd, costo_usd, ganancia_usd, ganancia_pct, n_posiciones "
+                    "FROM historial_pnl WHERE cartera_id=? ORDER BY fecha DESC LIMIT 1",
+                    [cartera_id]
+                )
+                if not df_ult.empty:
+                    valor_usd = float(df_ult.iloc[0]["valor_usd"] or 0)
+                    costo_usd = float(df_ult.iloc[0]["costo_usd"] or 0)
+                    gan_usd   = float(df_ult.iloc[0]["ganancia_usd"] or 0)
+                    gan_pct   = float(df_ult.iloc[0]["ganancia_pct"] or 0)
+                    n_pos     = int(df_ult.iloc[0]["n_posiciones"] or 0)
+            except Exception:
+                pass
 
         hoy = date.today().strftime("%Y-%m-%d")
 
@@ -92,16 +108,7 @@ def guardar_snapshot(cartera_id: int, ccl: float) -> dict:
         import traceback
         return {"error": str(e), "traceback": traceback.format_exc()}
 
-def listar_historial(cartera_id: int, dias: int = 365) -> pd.DataFrame:
-    """Lista el historial de P&L de una cartera."""
-    desde = (date.today() - timedelta(days=dias)).strftime("%Y-%m-%d")
-    try:
-        return cartera_db._read_sql(
-            "SELECT * FROM historial_pnl WHERE cartera_id=? AND fecha>=? ORDER BY fecha",
-            [cartera_id, desde]
-        )
-    except Exception:
-        return pd.DataFrame()
+
 
 def init_historial_db() -> bool:
     """Crea la tabla historial_pnl si no existe. Retorna True si OK."""
@@ -365,20 +372,32 @@ def render():
         ultimo = df_hist.iloc[-1]
         n_dias = len(df_hist)
 
+        
+
+
         valor_ini = float(primer.get("valor_usd", 0) or 0)
         valor_fin = float(ultimo.get("valor_usd", 0) or 0)
         gan_total = valor_fin - valor_ini
         gan_pct_total = (gan_total / valor_ini * 100) if valor_ini > 0 else 0
 
+        # Total real de snapshots (sin filtro de período)
+        try:
+            df_total = cartera_db._read_sql(
+                "SELECT COUNT(*) as total FROM historial_pnl WHERE cartera_id=?",
+                [cartera_id]
+            )
+            total_snapshots = int(df_total.iloc[0]["total"]) if not df_total.empty else n_dias
+        except Exception:
+            total_snapshots = n_dias
+
         st.markdown(f"### 📊 {nombre_sel} — {periodo}")
         c1, c2, c3, c4, c5 = st.columns(5)
-        c1.metric("💰 Valor actual",    f"${valor_fin:,.2f}")
-        c2.metric("📥 Valor inicial",   f"${valor_ini:,.2f}")
-        gan_color = "normal"
-        c3.metric("📈 Ganancia período", f"${gan_total:+,.2f}",
-                  delta=f"{gan_pct_total:+.2f}%", delta_color=gan_color)
-        c4.metric("📅 Snapshots",       n_dias)
-        c5.metric("💱 CCL último",      f"${float(ultimo.get('ccl', ccl)):,.0f}")
+        c1.metric("Valor actual",    f"${valor_fin:,.2f}")
+        c2.metric("Valor inicial",   f"${valor_ini:,.2f}")
+        c3.metric("Ganancia periodo", f"${gan_total:+,.2f}",
+                  delta=f"{gan_pct_total:+.2f}%")
+        c4.metric("Snapshots",       total_snapshots)
+        c5.metric("CCL ultimo",      f"${float(ultimo.get('ccl', 0)):,.0f}")
 
         st.markdown("---")
 
