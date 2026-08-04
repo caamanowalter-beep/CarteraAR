@@ -9,7 +9,21 @@ import plotly.express as px
 from datetime import date
 import io, os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import cartera_db
+import core
 
+try:
+    import auth as _auth
+    AUTH_OK = True
+except Exception:
+    AUTH_OK = False
+
+def _get_user_id():
+    if AUTH_OK and _auth.esta_logueado():
+        return _auth.get_user_id()
+    return None
+
+BG_DARK      = "#0f1117"
 BG_CARD      = "#1e2130"
 COLOR_VERDE  = "#00c896"
 COLOR_ROJO   = "#f74f4f"
