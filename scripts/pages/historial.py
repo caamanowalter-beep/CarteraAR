@@ -110,6 +110,24 @@ def guardar_snapshot(cartera_id: int, ccl: float) -> dict:
 
 
 
+def listar_historial(cartera_id: int, dias: int = 365) -> pd.DataFrame:
+    """Lista el historial de P&L de una cartera."""
+    from datetime import timedelta
+    desde = (date.today() - timedelta(days=dias)).strftime("%Y-%m-%d")
+    try:
+        return cartera_db._read_sql(
+            "SELECT * FROM historial_pnl WHERE cartera_id=? AND fecha>=? ORDER BY fecha",
+            [cartera_id, desde]
+        )
+    except Exception:
+        try:
+            return cartera_db._read_sql(
+                "SELECT * FROM historial_pnl WHERE cartera_id=? ORDER BY fecha",
+                [cartera_id]
+            )
+        except Exception:
+            return pd.DataFrame()
+
 def init_historial_db() -> bool:
     """Crea la tabla historial_pnl si no existe. Retorna True si OK."""
     con = cartera_db._get_connection()
