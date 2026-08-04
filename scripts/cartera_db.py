@@ -450,11 +450,19 @@ def listar_movimientos(cartera_id: int, ticker: str = None) -> pd.DataFrame:
         [cartera_id]
     )
 
-
+def listar_ganancias_realizadas(cartera_id: int) -> pd.DataFrame:
     return _read_sql(
         "SELECT * FROM ganancias_realizadas WHERE cartera_id=? ORDER BY fecha_venta DESC",
         [cartera_id]
     )
+
+def eliminar_movimiento(mov_id: int) -> None:
+    """Elimina un movimiento por su ID."""
+    _execute(
+        "DELETE FROM movimientos WHERE id=?",
+        [mov_id]
+    )
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # P&L EN TIEMPO REAL
@@ -598,6 +606,7 @@ def pesos_cartera(df_pnl: pd.DataFrame) -> pd.DataFrame:
     pesos = (grp / total * 100).round(2).reset_index()
     pesos.columns = ["Ticker", "Peso (%)"]
     return pesos
+
 
 def ganancias_realizadas_resumen(cartera_id: int) -> dict:
     df = listar_ganancias_realizadas(cartera_id)
