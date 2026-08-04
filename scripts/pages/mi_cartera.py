@@ -458,23 +458,56 @@ def _tab_movimientos(cartera_id: int, nombre: str):
 
     # ── Historial de movimientos con botón eliminar ──────────────────────────
     st.markdown("---")
-    st.markdown("#### 📋 Historial de movimientos")
-    df_mov = cartera_db.listar_movimientos(cartera_id)
-    if not df_mov.empty:
+    st.markdown("#### Historial de movimientos")
+
+    @st.fragment
+    def _historial_mov_frag(cartera_id: int):
+        df_mov = cartera_db.listar_movimientos(cartera_id)
+        if df_mov.empty:
+            st.info("Sin movimientos registrados todavia.")
+            return
+
         key_confirm = f"confirm_del_mov_{cartera_id}"
         if key_confirm not in st.session_state:
             st.session_state[key_confirm] = None
 
-        st.caption("Hacé clic en 🗑️ para eliminar un movimiento. Se te pedirá confirmación.")
+        # Panel de confirmacion (arriba del listado)
+        if st.session_state[key_confirm] is not None:
+            mid = st.session_state[key_confirm]
+            row_del = df_mov[df_mov["id"] == mid].iloc[0] if "id" in df_mov.columns and not df_mov[df_mov["id"] == mid].empty else None
+            if row_del is not None:
+                st.warning(
+                    f"Confirmas eliminar: **{row_del['tipo']}** "
+                    f"**{row_del['ticker']}** - {row_del['cantidad']} unidades "
+                    f"@ ${row_del['precio']:,.2f} del {row_del['fecha']}?"
+                )
+            else:
+                st.warning(f"Confirmas eliminar el movimiento ID={mid}?")
+            c_si, c_no = st.columns(2)
+            if c_si.button("Confirmar eliminacion", key=f"confirm_si_{mid}_{cartera_id}",
+                           type="primary", use_container_width=True):
+                try:
+                    cartera_db.eliminar_movimiento(mid)
+                    st.session_state[key_confirm] = None
+                    st.success("Movimiento eliminado.")
+                    st.rerun(scope="fragment")
+                except Exception as e:
+                    st.error(f"Error al eliminar: {e}")
+            if c_no.button("Cancelar", key=f"confirm_no_{mid}_{cartera_id}",
+                           use_container_width=True):
+                st.session_state[key_confirm] = None
+                st.rerun(scope="fragment")
+            st.markdown("---")
 
+        st.caption("Hace clic en 'Eliminar' para borrar un movimiento.")
         for _, row in df_mov.iterrows():
             mov_id = int(row["id"]) if "id" in row.index else None
             tipo_color = "#00c896" if row["tipo"] == "COMPRA" else "#f74f4f"
-            precio_fmt = f"${row['precio']:,.2f}" if pd.notna(row['precio']) else "—"
+            precio_fmt = f"${row['precio']:,.2f}" if pd.notna(row['precio']) else "-"
             comision_fmt = f"${row.get('comision', 0):,.2f}" if pd.notna(row.get('comision', 0)) else "$0.00"
             notas_txt = str(row.get("notas", "") or "")
 
-            col_info, col_btn = st.columns([11, 1])
+            col_info, col_btn = st.columns([10, 2])
             with col_info:
                 st.markdown(
                     f'<div style="background:#1e2130;padding:8px 12px;border-radius:8px;'
@@ -485,45 +518,19 @@ def _tab_movimientos(cartera_id: int, nombre: str):
                     f'&nbsp;&nbsp;Cant: <span style="color:white">{row["cantidad"]}</span>'
                     f'&nbsp;&nbsp;Precio: <span style="color:white">{precio_fmt}</span>'
                     f'&nbsp;&nbsp;<span style="color:#aaa">{row.get("moneda","")}</span>'
-                    f'&nbsp;&nbsp;Comisión: <span style="color:#aaa">{comision_fmt}</span>'
+                    f'&nbsp;&nbsp;Comision: <span style="color:#aaa">{comision_fmt}</span>'
                     + (f'&nbsp;&nbsp;<span style="color:#aaa;font-style:italic">{notas_txt}</span>' if notas_txt else '')
                     + '</div>',
                     unsafe_allow_html=True
                 )
             with col_btn:
                 if mov_id is not None:
-                    if st.button("🗑️", key=f"del_mov_{mov_id}_{cartera_id}",
-                                 help="Eliminar este movimiento"):
+                    if st.button("Eliminar", key=f"del_mov_{mov_id}_{cartera_id}",
+                                 use_container_width=True):
                         st.session_state[key_confirm] = mov_id
+                        st.rerun(scope="fragment")
 
-        if st.session_state[key_confirm] is not None:
-            mid = st.session_state[key_confirm]
-            row_del = df_mov[df_mov["id"] == mid].iloc[0] if "id" in df_mov.columns and not df_mov[df_mov["id"] == mid].empty else None
-            if row_del is not None:
-                st.warning(
-                    f"⚠️ Confirmas eliminar: **{row_del['tipo']}** "
-                    f"**{row_del['ticker']}** — {row_del['cantidad']} unidades "
-                    f"@ ${row_del['precio']:,.2f} del {row_del['fecha']}?"
-                )
-            else:
-                st.warning(f"⚠️ Confirmas eliminar el movimiento ID={mid}?")
-            c_si, c_no = st.columns(2)
-            if c_si.button("✅ Sí, eliminar", key=f"confirm_si_{mid}_{cartera_id}",
-                           type="primary", use_container_width=True):
-                try:
-                    cartera_db.eliminar_movimiento(mid)
-                    st.session_state[key_confirm] = None
-                    st.success("✅ Movimiento eliminado.")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"❌ Error al eliminar: {e}")
-            if c_no.button("❌ Cancelar", key=f"confirm_no_{mid}_{cartera_id}",
-                           use_container_width=True):
-                st.session_state[key_confirm] = None
-                st.rerun()
-    else:
-        st.info("Sin movimientos registrados todavía.")
-
+    _historial_mov_frag(cartera_id)
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # TAB: IMPORTAR CSV/EXCEL
