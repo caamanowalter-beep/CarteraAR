@@ -200,21 +200,7 @@ _PAGINAS = {
 if AUTH_DISPONIBLE and auth.esta_logueado():
     _hoy = __import__('datetime').date.today().strftime("%Y-%m-%d")
     _snap_key = f"snapshot_done_{_hoy}"
-    if _snap_key not in st.session_state:
-        try:
-            import cartera_db as _cdb
-            import core as _core
-            _uid  = auth.get_user_id()
-            _ccl  = _core.obtener_dolar_ccl()
-            _carts = _cdb.listar_carteras(usuario_id=_uid)
-            if not _carts.empty:
-                from pages.historial import guardar_snapshot, init_historial_db
-                init_historial_db()
-                for _, _row in _carts.iterrows():
-                    guardar_snapshot(_row['id'], _ccl)
-            st.session_state[_snap_key] = True
-        except Exception:
-            pass  # No interrumpir la app si falla el snapshot
+    
 
 if pagina in _PAGINAS:
     modulo = importlib.import_module(_PAGINAS[pagina])
