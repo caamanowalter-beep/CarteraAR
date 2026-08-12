@@ -421,40 +421,63 @@ def _tab_movimientos(cartera_id: int, nombre: str):
         "El sistema actualiza automáticamente el precio promedio ponderado."
     )
 
-    with st.form("form_movimiento", clear_on_submit=True):
-        c1, c2, c3 = st.columns(3)
-        tipo     = c1.selectbox("Tipo", ["COMPRA", "VENTA"])
-        ticker   = c2.text_input("Ticker", placeholder="ej: MSFT").upper().strip()
-        fecha_op = c3.date_input("Fecha", value=date.today())
+    # Selector de tipo FUERA del form para actualización inmediata del botón
+    key_tipo_mov = f"tipo_movimiento_{cartera_id}"
+    if key_tipo_mov not in st.session_state:
+        st.session_state[key_tipo_mov] = "COMPRA"
+
+    col_tipo1, col_tipo2 = st.columns(2)
+    if col_tipo1.button("COMPRA", key=f"btn_compra_{cartera_id}",
+                        use_container_width=True,
+                        type="primary" if st.session_state[key_tipo_mov] == "COMPRA" else "secondary"):
+        st.session_state[key_tipo_mov] = "COMPRA"
+        st.rerun()
+    if col_tipo2.button("VENTA", key=f"btn_venta_{cartera_id}",
+                        use_container_width=True,
+                        type="primary" if st.session_state[key_tipo_mov] == "VENTA" else "secondary"):
+        st.session_state[key_tipo_mov] = "VENTA"
+        st.rerun()
+
+    tipo = st.session_state[key_tipo_mov]
+    color_tipo = "#00c896" if tipo == "COMPRA" else "#f74f4f"
+    st.markdown(
+        f'<div style="background:{color_tipo}22;border-left:3px solid {color_tipo};'
+        f'padding:6px 12px;border-radius:6px;margin-bottom:8px;font-weight:600;color:{color_tipo}">'
+        f'Modo activo: {tipo}</div>',
+        unsafe_allow_html=True
+    )
+
+    with st.form(f"form_movimiento_{cartera_id}", clear_on_submit=True):
+        c1, c2 = st.columns(2)
+        ticker   = c1.text_input("Ticker", placeholder="ej: MSFT").upper().strip()
+        fecha_op = c2.date_input("Fecha", value=date.today())
 
         c4, c5, c6, c7 = st.columns(4)
         cantidad = c4.number_input("Cantidad", min_value=0.0001, value=1.0, step=0.01)
         precio   = c5.number_input("Precio unitario", min_value=0.0001,
                                     value=100.0, step=0.01)
         moneda   = c6.selectbox("Moneda", ["USD", "ARS"])
-        comision = c7.number_input("Comisión", min_value=0.0, value=0.0, step=0.01)
+        comision = c7.number_input("Comision", min_value=0.0, value=0.0, step=0.01)
         notas    = st.text_input("Notas (opcional)")
 
-        if st.form_submit_button(f"✅ Registrar {tipo}",
-                                  type="primary", use_container_width=True):
+        btn_label = f"Confirmar {tipo}"
+        if st.form_submit_button(btn_label, type="primary", use_container_width=True):
             if not ticker:
-                st.error("❌ Ingresá un ticker válido.")
+                st.error("Ingresa un ticker valido.")
             else:
                 try:
                     cartera_db.registrar_movimiento(
                         cartera_id, tipo, ticker, cantidad, precio,
                         moneda, str(fecha_op), comision, notas
                     )
-                    icono = "🟢" if tipo == "COMPRA" else "🔴"
+                    icono = "COMPRA" if tipo == "COMPRA" else "VENTA"
                     st.success(
-                        f"{icono} {tipo}: {cantidad} × {ticker} @ "
+                        f"{icono}: {cantidad} x {ticker} @ "
                         f"${precio:,.2f} {moneda} registrado en {nombre}"
                     )
                     st.rerun()
                 except Exception as e:
-                    st.error(f"❌ Error: {e}")
-
-    
+                    st.error(f"Error: {e}")
 
     # ── Historial de movimientos con botón eliminar ──────────────────────────
     st.markdown("---")
@@ -822,10 +845,51 @@ def _tab_renta_fija(cartera_id: int, nombre: str, ccl: float):
             st.rerun()
 
     st.markdown("---")
-    st.markdown("#### 🗑️ Eliminar instrumento")
+    st.markdown("#### Registrar venta de bono/ON")
+    with st.form(f"form_venta_rf_{cartera_id}", clear_on_submit=True):
+        c1, c2 = st.columns(2)
+        ticker_venta = c1.selectbox("Ticker a vender", df_rf["ticker"].tolist(),
+                                     key=f"venta_rf_ticker_{cartera_id}")
+        fecha_venta  = c2.date_input("Fecha de venta", value=date.today())
+        row_venta    = df_rf[df_rf["ticker"] == ticker_venta].iloc[0] if not df_rf.empty else None
+        vn_max       = float(row_venta["valor_nominal"]) if row_venta is not None else 1000.0
+        moneda_venta = str(row_venta["moneda"]) if row_venta is not None else "ARS"
+        c3, c4, c5 = st.columns(3)
+        vn_vender    = c3.number_input(f"VN a vender (max {vn_max:,.0f})",
+                                        min_value=1.0, max_value=vn_max,
+                                        value=vn_max, step=1.0)
+        precio_venta = c4.number_input("Precio venta (%)", min_value=0.01,
+                                        value=85.0, step=0.01,
+                                        help="Precio en % del VN. Ej: 83.29 para AL29")
+        comision_v   = c5.number_input("Comision", min_value=0.0, value=0.0, step=0.01)
+        notas_v      = st.text_input("Notas (opcional)", key=f"notas_venta_rf_{cartera_id}")
+        if st.form_submit_button("Confirmar venta", type="primary", use_container_width=True):
+            res_v = cartera_db.registrar_venta_renta_fija(
+                cartera_id, ticker_venta, vn_vender, precio_venta,
+                moneda_venta, str(fecha_venta), comision_v, notas_v
+            )
+            if "error" in res_v:
+                st.error(f"Error: {res_v['error']}")
+            else:
+                gan = res_v['ganancia']
+                gan_str = f"+${gan:,.2f}" if gan >= 0 else f"-${abs(gan):,.2f}"
+                st.success(
+                    f"Venta registrada: {vn_vender:,.0f} VN de {ticker_venta} "
+                    f"@ {precio_venta:.2f}% | Ingreso: ${res_v['ingreso']:,.2f} {moneda_venta} | "
+                    f"Ganancia: {gan_str} ({res_v['ganancia_pct']:+.2f}%)"
+                )
+                if res_v['vn_restante'] < 1:
+                    st.info(f"{ticker_venta} eliminado de la cartera (posicion cerrada).")
+                else:
+                    st.info(f"VN restante de {ticker_venta}: {res_v['vn_restante']:,.0f}")
+                st.rerun()
+
+    st.markdown("---")
+    st.markdown("#### Eliminar instrumento")
     ticker_del = st.selectbox("Ticker a eliminar", df_rf["ticker"].tolist(),
                                key=f"del_rf_sel_{cartera_id}")
-    if st.button(f"🗑️ Eliminar {ticker_del}", type="secondary", key=f"btn_del_rf_{cartera_id}"):
+    if st.button(f"Eliminar {ticker_del}", type="secondary", key=f"btn_del_rf_{cartera_id}"):
+    
         cartera_db.eliminar_renta_fija(cartera_id, ticker_del)
         st.warning(f"🗑️ {ticker_del} eliminado")
         st.rerun()

@@ -698,9 +698,57 @@ def agregar_renta_fija(cartera_id: int, ticker: str, tipo: str,
               valor_nominal, precio_compra_pct, moneda.upper(),
               fecha_compra, fecha_vencimiento, tir_compra, notas))
 
+
+
 def eliminar_renta_fija(cartera_id: int, ticker: str) -> None:
     _execute("DELETE FROM renta_fija WHERE cartera_id=? AND ticker=?",
              (cartera_id, ticker.upper()))
+
+def registrar_venta_renta_fija(cartera_id: int, ticker: str,
+                                vn_vendido: float, precio_venta_pct: float,
+                                moneda: str, fecha: str,
+                                comision: float = 0.0, notas: str = "") -> dict:
+    """Registra la venta parcial o total de un instrumento de renta fija."""
+    ticker = ticker.upper()
+    moneda = moneda.upper()
+    df = _read_sql(
+        "SELECT valor_nominal, precio_compra_pct, moneda FROM renta_fija WHERE cartera_id=? AND ticker=?",
+        [cartera_id, ticker]
+    )
+    if df.empty:
+        return {"error": f"No se encontro {ticker} en la cartera."}
+    row        = df.iloc[0]
+    vn_actual  = float(row["valor_nominal"])
+    pct_compra = float(row["precio_compra_pct"])
+    if vn_vendido > vn_actual:
+        return {"error": f"No podes vender {vn_vendido:,.0f} VN — solo tenes {vn_actual:,.0f} VN."}
+    costo_venta   = vn_vendido * pct_compra / 100
+    ingreso_venta = vn_vendido * precio_venta_pct / 100 - comision
+    ganancia      = ingreso_venta - costo_venta
+    ganancia_pct  = (ganancia / costo_venta * 100) if costo_venta > 0 else 0
+    _execute("""
+        INSERT INTO ganancias_realizadas
+            (cartera_id, ticker, fecha_venta, cantidad_vendida,
+             precio_compra_prom, precio_venta, moneda, ganancia_usd, ganancia_pct)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (cartera_id, ticker, fecha, vn_vendido,
+          pct_compra, precio_venta_pct, moneda, round(ganancia, 2), round(ganancia_pct, 2)))
+    vn_restante = vn_actual - vn_vendido
+    if vn_restante < 1:
+        _execute("DELETE FROM renta_fija WHERE cartera_id=? AND ticker=?",
+                 (cartera_id, ticker))
+    else:
+        _execute("UPDATE renta_fija SET valor_nominal=? WHERE cartera_id=? AND ticker=?",
+                 (round(vn_restante, 2), cartera_id, ticker))
+    return {
+        "ticker":       ticker,
+        "vn_vendido":   vn_vendido,
+        "vn_restante":  vn_restante,
+        "ingreso":      round(ingreso_venta, 2),
+        "ganancia":     round(ganancia, 2),
+        "ganancia_pct": round(ganancia_pct, 2),
+        "moneda":       moneda,
+    }
 
 def listar_renta_fija(cartera_id: int) -> pd.DataFrame:
     return _read_sql(
