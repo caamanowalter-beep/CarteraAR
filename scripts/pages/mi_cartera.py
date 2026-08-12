@@ -844,20 +844,26 @@ def _tab_renta_fija(cartera_id: int, nombre: str, ccl: float):
             st.success(f"✅ {ticker_edit} actualizado")
             st.rerun()
 
+
     st.markdown("---")
     st.markdown("#### Registrar venta de bono/ON")
+
+    # Selectbox FUERA del form para actualizar vn_max dinamicamente
+    ticker_venta = st.selectbox("Ticker a vender", df_rf["ticker"].tolist(),
+                                 key=f"sel_venta_rf_{cartera_id}")
+    row_venta    = df_rf[df_rf["ticker"] == ticker_venta].iloc[0] if not df_rf.empty else None
+    vn_max       = float(row_venta["valor_nominal"]) if row_venta is not None else 1000.0
+    moneda_venta = str(row_venta["moneda"]) if row_venta is not None else "ARS"
+    pct_compra_v = float(row_venta["precio_compra_pct"]) if row_venta is not None else 0.0
+    st.caption(f"VN disponible: **{vn_max:,.0f} {moneda_venta}** | Precio compra: **{pct_compra_v:.2f}%**")
+
     with st.form(f"form_venta_rf_{cartera_id}", clear_on_submit=True):
-        c1, c2 = st.columns(2)
-        ticker_venta = c1.selectbox("Ticker a vender", df_rf["ticker"].tolist(),
-                                     key=f"venta_rf_ticker_{cartera_id}")
-        fecha_venta  = c2.date_input("Fecha de venta", value=date.today())
-        row_venta    = df_rf[df_rf["ticker"] == ticker_venta].iloc[0] if not df_rf.empty else None
-        vn_max       = float(row_venta["valor_nominal"]) if row_venta is not None else 1000.0
-        moneda_venta = str(row_venta["moneda"]) if row_venta is not None else "ARS"
+        fecha_venta  = st.date_input("Fecha de venta", value=date.today())
         c3, c4, c5 = st.columns(3)
-        vn_vender    = c3.number_input(f"VN a vender (max {vn_max:,.0f})",
-                                        min_value=1.0, max_value=vn_max,
-                                        value=vn_max, step=1.0)
+        vn_vender    = c3.number_input("VN a vender",
+                                        min_value=1.0, max_value=float(vn_max),
+                                        value=float(vn_max), step=1.0,
+                                        help=f"Maximo: {vn_max:,.0f}")
         precio_venta = c4.number_input("Precio venta (%)", min_value=0.01,
                                         value=85.0, step=0.01,
                                         help="Precio en % del VN. Ej: 83.29 para AL29")
