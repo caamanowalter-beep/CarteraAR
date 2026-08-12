@@ -511,11 +511,7 @@ def calcular_pnl(cartera_id: int, ccl: float = 1200.0) -> pd.DataFrame:
                             precios_ars[t] = p_corregido
                         else:
                             precios_ars[t] = p_ars_float / 1_000_000
-            else:
-                info  = yf.Ticker(t).info
-                p_usd = info.get("currentPrice") or info.get("regularMarketPrice")
-                if p_usd:
-                    precios_usd[t] = float(p_usd)
+            
         except Exception:
             pass
 
@@ -555,13 +551,7 @@ def calcular_pnl(cartera_id: int, ccl: float = 1200.0) -> pd.DataFrame:
                 "Ganancia (ARS)":      round(gan_ars, 0) if gan_ars else None,
                 "Notas":               pos.get("notas", ""),
             })
-        else:
-            # ── Acción internacional: todo en USD ────────────────────────────
-            precio_actual_usd = precios_usd.get(t)
-            precio_compra_usd = precio_compra / ccl if moneda == "ARS" and ccl > 0 else precio_compra
-            costo_total       = precio_compra_usd * cantidad
-            valor_actual      = (precio_actual_usd * cantidad) if precio_actual_usd else None
-            gan_usd           = (valor_actual - costo_total) if valor_actual else None
+        
             gan_pct           = (gan_usd / costo_total * 100) if gan_usd and costo_total else None
             gan_ars           = (gan_usd * ccl) if gan_usd else None
 

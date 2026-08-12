@@ -46,33 +46,19 @@ def guardar_snapshot(cartera_id: int, ccl: float) -> dict:
         df_pnl = cartera_db.calcular_pnl(cartera_id, ccl=ccl)
         res    = cartera_db.resumen_cartera(df_pnl)
 
-        valor_usd = res.get("Valor actual (USD)", 0) or 0
-        costo_usd = res.get("Costo total (USD)", 0) or 0
-        gan_usd   = res.get("Ganancia total (USD)", 0) or 0
-        gan_pct   = res.get("Ganancia total (%)", 0) or 0
-        n_pos     = res.get("Posiciones", 0) or 0
+        
 
-        # Fallback: si valor_usd es 0 o None (Yahoo Finance bloqueado), usar último snapshot
-        if not valor_usd or valor_usd == 0:
+        # Fallback: si valor_usd es 0 (Yahoo Finance bloqueado), usar último snapshot
+        if valor_usd == 0:
             try:
                 df_ult = cartera_db._read_sql(
                     "SELECT valor_usd, costo_usd, ganancia_usd, ganancia_pct, n_posiciones "
-                    "FROM historial_pnl WHERE cartera_id=? AND valor_usd IS NOT NULL AND valor_usd > 0 "
-                    "ORDER BY fecha DESC LIMIT 1",
+                    "FROM historial_pnl WHERE cartera_id=? ORDER BY fecha DESC LIMIT 1",
                     [cartera_id]
                 )
-                if not df_ult.empty:
-                    valor_usd = float(df_ult.iloc[0]["valor_usd"] or 0)
-                    costo_usd = float(df_ult.iloc[0]["costo_usd"] or 0)
-                    gan_usd   = float(df_ult.iloc[0]["ganancia_usd"] or 0)
-                    gan_pct   = float(df_ult.iloc[0]["ganancia_pct"] or 0)
-                    n_pos     = int(df_ult.iloc[0]["n_posiciones"] or 0)
+                
             except Exception:
                 pass
-
-        # Si aun no hay valor valido, no guardar snapshot (evita sobreescribir con NULL/0)
-        if not valor_usd or valor_usd == 0:
-            return {"error": "Sin datos de precio disponibles (Yahoo Finance no respondio). Snapshot no guardado.", "skip": True}
 
         hoy = date.today().strftime("%Y-%m-%d")
 
