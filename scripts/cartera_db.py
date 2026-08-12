@@ -845,6 +845,77 @@ def listar_fci(cartera_id: int) -> pd.DataFrame:
         [cartera_id]
     )
 
+def calcular_pnl_renta_fija(cartera_id: int, ccl: float = 1200.0,
+                              precios_actuales: dict = None) -> pd.DataFrame:
+    """
+    Calcula P&L de renta fija.
+    Intenta obtener precios actuales desde tabla precios_bonos.
+    Si no hay precio actual, Ganancia = None (no muestra 0% engañoso).
+    """
+    df = listar_renta_fija(cartera_id)
+    if df.empty:
+        return pd.DataFrame()
+
+    # Intentar obtener precios actuales desde tabla precios_bonos
+    if precios_actuales is None:
+        try:
+            df_precios = _read_sql("SELECT ticker, precio_pct FROM precios_bonos", [])
+            if not df_precios.empty:
+                precios_actuales = dict(zip(
+                    df_precios["ticker"].str.upper(),
+                    df_precios["precio_pct"].astype(float)
+                ))
+            else:
+                precios_actuales = {}
+        except Exception:
+            precios_actuales = {}
+
+    rows = []
+    for _, pos in df.iterrows():
+        ticker      = str(pos["ticker"]).upper()
+        tipo        = pos["tipo"]
+        vn          = float(pos["valor_nominal"])
+        pct_compra  = float(pos["precio_compra_pct"])
+        moneda      = str(pos["moneda"]).upper()
+        tir_compra  = pos.get("tir_compra")
+        vencimiento = pos.get("fecha_vencimiento", "—")
+
+        pct_actual       = precios_actuales.get(ticker) if precios_actuales else None
+        tiene_precio_act = pct_actual is not None
+        if pct_actual is None:
+            pct_actual = pct_compra  # para calcular costo, ganancia = None
+
+        costo_usd = vn * pct_compra / 100
+        valor_usd = vn * pct_actual / 100
+        gan_usd   = (valor_usd - costo_usd) if tiene_precio_act else None
+        gan_pct   = (gan_usd / costo_usd * 100) if (gan_usd is not None and costo_usd > 0) else None
+
+        if moneda == "ARS":
+            costo_usd_c = costo_usd / ccl if ccl > 0 else costo_usd
+            valor_usd_c = valor_usd / ccl if ccl > 0 else valor_usd
+            gan_usd_c   = (gan_usd / ccl) if (gan_usd is not None and ccl > 0) else None
+        else:
+            costo_usd_c = costo_usd
+            valor_usd_c = valor_usd
+            gan_usd_c   = gan_usd
+
+        rows.append({
+            "Ticker":             ticker,
+            "Tipo":               tipo,
+            "Valor nominal":      vn,
+            "Precio compra %":    round(pct_compra, 2),
+            "Precio actual %":    round(pct_actual, 2) if tiene_precio_act else None,
+            "Moneda":             moneda,
+            "Costo (USD)":        round(costo_usd_c, 2),
+            "Valor actual (USD)": round(valor_usd_c, 2) if tiene_precio_act else None,
+            "Ganancia (USD)":     round(gan_usd_c, 2) if gan_usd_c is not None else None,
+            "Ganancia (%)":       round(gan_pct, 2) if gan_pct is not None else None,
+            "Ganancia (ARS)":     round(gan_usd_c * ccl, 0) if gan_usd_c is not None else None,
+            "TIR compra":         round(tir_compra, 2) if tir_compra else None,
+            "Vencimiento":        vencimiento,
+        })
+    return pd.DataFrame(rows)
+
 def calcular_pnl_fci(cartera_id: int, ccl: float = 1200.0,
                       valores_actuales: dict = None) -> pd.DataFrame:
     """
