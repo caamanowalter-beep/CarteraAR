@@ -438,6 +438,21 @@ def registrar_movimiento(cartera_id: int, tipo: str, ticker: str,
         else:
             _execute("DELETE FROM posiciones WHERE cartera_id=? AND ticker=?",
                      (cartera_id, ticker.upper()))
+        # Registrar ingreso automático en saldo disponible
+        ingreso_neto = precio * cantidad - comision
+        try:
+            registrar_saldo(
+                cartera_id,
+                concepto=f"Venta {ticker.upper()} x{cantidad:.0f} @ {precio:,.2f}",
+                monto=ingreso_neto,
+                moneda=moneda.upper(),
+                tipo_cambio="CCL" if moneda.upper() == "ARS" else "USD directo",
+                ccl=1200.0,
+                tipo="VENTA",
+                fecha=fecha
+            )
+        except Exception:
+            pass  # No interrumpir si falla el registro de saldo
 
 def listar_movimientos(cartera_id: int, ticker: str = None) -> pd.DataFrame:
     if ticker:
@@ -737,9 +752,21 @@ def registrar_venta_renta_fija(cartera_id: int, ticker: str,
     if vn_restante < 1:
         _execute("DELETE FROM renta_fija WHERE cartera_id=? AND ticker=?",
                  (cartera_id, ticker))
-    else:
-        _execute("UPDATE renta_fija SET valor_nominal=? WHERE cartera_id=? AND ticker=?",
-                 (round(vn_restante, 2), cartera_id, ticker))
+    # Registrar ingreso automatico en saldo disponible
+    try:
+        registrar_saldo(
+            cartera_id,
+            concepto=f"Venta bono {ticker} VN:{vn_vendido:,.0f} @ {precio_venta_pct:.2f}%",
+            monto=round(ingreso_venta, 2),
+            moneda=moneda,
+            tipo_cambio="CCL" if moneda == "ARS" else "USD directo",
+            ccl=1200.0,
+            tipo="VENTA",
+            fecha=fecha
+        )
+    except Exception:
+        pass
+
     return {
         "ticker":       ticker,
         "vn_vendido":   vn_vendido,
@@ -1238,3 +1265,4 @@ def calcular_valor_bonos_cartera(cartera_id: int, ccl: float = 1200.0) -> pd.Dat
             "Precio actualizado": actualizado,
         })
     return pd.DataFrame(rows)
+
