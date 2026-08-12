@@ -1,3 +1,4 @@
+
 """
 pages/inicio.py — Dashboard principal con resumen de inversiones por grupo.
 """
@@ -417,7 +418,17 @@ def render():
 
     
 
-    
+    # Calcular ganancia % por grupo (solo si hay precio actual disponible)
+    for nombre, g in grupos.items():
+        if g["costo_usd"] > 0 and g.get("tiene_precio", True):
+            if g["ganancia_usd"] != 0 or nombre == "Acciones/CEDEARs":
+                g["ganancia_pct"] = round(g["ganancia_usd"] / g["costo_usd"] * 100, 2)
+
+    # Totales
+    total_valor   = sum(g["valor_usd"] for g in grupos.values())
+    total_costo   = sum(g["costo_usd"] for g in grupos.values())
+    total_gan     = sum(g["ganancia_usd"] for g in grupos.values())
+    total_gan_pct = (total_gan / total_costo * 100) if total_costo > 0 else 0
 
     # ── Métricas globales ─────────────────────────────────────────────────────
     st.markdown("---")
@@ -555,3 +566,4 @@ def render():
         c4.metric("Blue",    f"${tc.get('Blue'):,.2f}"          if tc.get('Blue')    else "—")
     except Exception:
         st.metric("CCL", f"${ccl:,.2f}")
+
