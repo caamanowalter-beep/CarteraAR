@@ -364,18 +364,7 @@ def render():
         ccl = core.obtener_dolar_ccl()
 
     # ── Calcular datos por grupo ──────────────────────────────────────────────
-    grupos = {
-        "Acciones/CEDEARs": {"valor_usd": 0, "costo_usd": 0, "ganancia_usd": 0,
-                              "ganancia_pct": None, "items": 0},
-        "Renta Fija":        {"valor_usd": 0, "costo_usd": 0, "ganancia_usd": 0,
-                              "ganancia_pct": None, "items": 0},
-        "FCIs":              {"valor_usd": 0, "costo_usd": 0, "ganancia_usd": 0,
-                              "ganancia_pct": None, "items": 0},
-        "Dividendos cobrados":{"valor_usd": 0, "costo_usd": 0, "ganancia_usd": 0,
-                               "ganancia_pct": None, "items": 0},
-        "Saldo disponible":  {"valor_usd": 0, "costo_usd": 0, "ganancia_usd": 0,
-                              "ganancia_pct": None, "items": 0},
-    }
+    
 
     total_dividendos_usd = 0
     total_saldo_usd = 0
@@ -393,27 +382,7 @@ def render():
         except Exception:
             pass
 
-        # Renta fija
-        try:
-            df_rf = cartera_db.calcular_pnl_renta_fija(cid, ccl=ccl)
-            if not df_rf.empty:
-                grupos["Renta Fija"]["valor_usd"] += df_rf["Valor actual (USD)"].sum()
-                grupos["Renta Fija"]["costo_usd"]  += df_rf["Costo (USD)"].sum()
-                grupos["Renta Fija"]["ganancia_usd"] += df_rf["Ganancia (USD)"].sum()
-                grupos["Renta Fija"]["items"] += len(df_rf)
-        except Exception:
-            pass
-
-        # FCIs
-        try:
-            df_fci = cartera_db.calcular_pnl_fci(cid, ccl=ccl)
-            if not df_fci.empty:
-                grupos["FCIs"]["valor_usd"] += df_fci["Valor actual (USD)"].sum()
-                grupos["FCIs"]["costo_usd"]  += df_fci["Costo (USD)"].sum()
-                grupos["FCIs"]["ganancia_usd"] += df_fci["Ganancia (USD)"].sum()
-                grupos["FCIs"]["items"] += len(df_fci)
-        except Exception:
-            pass
+        
 
         # Dividendos
         try:
@@ -433,10 +402,7 @@ def render():
         except Exception:
             pass
 
-    # Calcular ganancia % por grupo
-    for nombre, g in grupos.items():
-        if g["costo_usd"] > 0:
-            g["ganancia_pct"] = round(g["ganancia_usd"] / g["costo_usd"] * 100, 2)
+    
 
     # Totales
     total_valor  = sum(g["valor_usd"] for g in grupos.values())

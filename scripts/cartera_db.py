@@ -756,62 +756,9 @@ def listar_renta_fija(cartera_id: int) -> pd.DataFrame:
         [cartera_id]
     )
 
-def calcular_pnl_renta_fija(cartera_id: int, ccl: float = 1200.0,
-                              precios_actuales: dict = None) -> pd.DataFrame:
-    """
-    Calcula P&L de renta fija.
-    precios_actuales: dict {ticker: precio_pct_actual} — si None, usa precio de compra
-    El P&L se calcula como: (precio_actual_pct - precio_compra_pct) / 100 * valor_nominal
-    """
-    df = listar_renta_fija(cartera_id)
-    if df.empty:
-        return pd.DataFrame()
 
-    rows = []
-    for _, pos in df.iterrows():
-        ticker        = pos["ticker"]
-        tipo          = pos["tipo"]
-        vn            = float(pos["valor_nominal"])
-        pct_compra    = float(pos["precio_compra_pct"])
-        moneda        = pos["moneda"]
-        tir_compra    = pos.get("tir_compra")
-        vencimiento   = pos.get("fecha_vencimiento", "—")
 
-        # Precio actual (si disponible)
-        pct_actual = precios_actuales.get(ticker) if precios_actuales else None
-        if pct_actual is None:
-            pct_actual = pct_compra  # sin datos → usar precio de compra
-
-        costo_usd  = vn * pct_compra / 100
-        valor_usd  = vn * pct_actual / 100
-        gan_usd    = valor_usd - costo_usd
-        gan_pct    = (gan_usd / costo_usd * 100) if costo_usd > 0 else 0
-
-        # Convertir a USD si está en ARS
-        if moneda == "ARS":
-            costo_usd_conv = costo_usd / ccl if ccl > 0 else costo_usd
-            valor_usd_conv = valor_usd / ccl if ccl > 0 else valor_usd
-            gan_usd_conv   = gan_usd / ccl if ccl > 0 else gan_usd
-        else:
-            costo_usd_conv = costo_usd
-            valor_usd_conv = valor_usd
-            gan_usd_conv   = gan_usd
-
-        rows.append({
-            "Ticker":           ticker,
-            "Tipo":             tipo,
-            "Valor nominal":    vn,
-            "Precio compra %":  round(pct_compra, 2),
-            "Precio actual %":  round(pct_actual, 2),
-            "Moneda":           moneda,
-            "Costo (USD)":      round(costo_usd_conv, 2),
-            "Valor actual (USD)": round(valor_usd_conv, 2),
-            "Ganancia (USD)":   round(gan_usd_conv, 2),
-            "Ganancia (%)":     round(gan_pct, 2),
-            "Ganancia (ARS)":   round(gan_usd_conv * ccl, 0),
-            "TIR compra":       round(tir_compra, 2) if tir_compra else None,
-            "Vencimiento":      vencimiento,
-        })
+        
     return pd.DataFrame(rows)
 
 
