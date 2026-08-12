@@ -366,6 +366,19 @@ def render():
     # ── Calcular datos por grupo ──────────────────────────────────────────────
     
 
+    grupos = {
+        "Acciones/CEDEARs": {"valor_usd": 0, "costo_usd": 0, "ganancia_usd": 0,
+                              "ganancia_pct": None, "items": 0, "tiene_precio": True},
+        "Renta Fija":        {"valor_usd": 0, "costo_usd": 0, "ganancia_usd": 0,
+                              "ganancia_pct": None, "items": 0, "tiene_precio": False},
+        "FCIs":              {"valor_usd": 0, "costo_usd": 0, "ganancia_usd": 0,
+                              "ganancia_pct": None, "items": 0, "tiene_precio": False},
+        "Dividendos cobrados":{"valor_usd": 0, "costo_usd": 0, "ganancia_usd": 0,
+                               "ganancia_pct": None, "items": 0, "tiene_precio": False},
+        "Saldo disponible":  {"valor_usd": 0, "costo_usd": 0, "ganancia_usd": 0,
+                              "ganancia_pct": None, "items": 0, "tiene_precio": False},
+    }
+
     total_dividendos_usd = 0
     total_saldo_usd = 0
 
@@ -404,11 +417,7 @@ def render():
 
     
 
-    # Totales
-    total_valor  = sum(g["valor_usd"] for g in grupos.values())
-    total_costo  = sum(g["costo_usd"] for g in grupos.values())
-    total_gan    = sum(g["ganancia_usd"] for g in grupos.values())
-    total_gan_pct = (total_gan / total_costo * 100) if total_costo > 0 else 0
+    
 
     # ── Métricas globales ─────────────────────────────────────────────────────
     st.markdown("---")
