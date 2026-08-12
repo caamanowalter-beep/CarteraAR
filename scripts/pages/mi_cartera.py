@@ -794,20 +794,40 @@ def _tab_renta_fija(cartera_id: int, nombre: str, ccl: float):
     df_pnl_rf = cartera_db.calcular_pnl_renta_fija(cartera_id, ccl)
     if not df_pnl_rf.empty:
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("💰 Valor actual (USD)", f"${df_pnl_rf['Valor actual (USD)'].sum():,.2f}")
-        c2.metric("📥 Costo total (USD)",  f"${df_pnl_rf['Costo (USD)'].sum():,.2f}")
-        c3.metric("📈 Ganancia (USD)", f"${df_pnl_rf['Ganancia (USD)'].sum():+,.2f}")
-        c4.metric("📊 Instrumentos", len(df_pnl_rf))
+        def _fmt_rf(v, fmt, fallback="—"):
+            try:
+                return fmt.format(v) if v is not None and str(v) not in ("nan", "None") else fallback
+            except Exception:
+                return fallback
+
+        val_act = df_pnl_rf["Valor actual (USD)"].dropna().sum()
+        costo   = df_pnl_rf["Costo (USD)"].dropna().sum()
+        gan     = df_pnl_rf["Ganancia (USD)"].dropna()
+        gan_sum = gan.sum() if not gan.empty else None
+        c1.metric("Valor actual (USD)", f"${val_act:,.2f}")
+        c2.metric("Costo total (USD)",  f"${costo:,.2f}")
+        c3.metric("Ganancia (USD)", f"${gan_sum:+,.2f}" if gan_sum is not None else "Sin precio actual")
+        c4.metric("Instrumentos", len(df_pnl_rf))
+
+        cols_rf = [c for c in ["Ticker","Tipo","Valor nominal","Precio compra %",
+                                "Precio actual %","Moneda","Costo (USD)",
+                                "Valor actual (USD)","Ganancia (USD)","Ganancia (%)",
+                                "Ganancia (ARS)","TIR compra","Vencimiento"]
+                   if c in df_pnl_rf.columns]
         st.dataframe(
-            df_pnl_rf.style
-                .map(_color_ganancia, subset=["Ganancia (USD)", "Ganancia (%)"])
+            df_pnl_rf[cols_rf].style
+                .map(_color_ganancia, subset=[c for c in ["Ganancia (USD)","Ganancia (%)"] if c in df_pnl_rf.columns])
                 .format({
-                    "Valor nominal": "${:,.2f}", "Precio compra %": "{:.2f}%",
-                    "Precio actual %": "{:.2f}%", "Costo (USD)": "${:,.2f}",
-                    "Valor actual (USD)": "${:,.2f}", "Ganancia (USD)": "${:+,.2f}",
-                    "Ganancia (%)": "{:+.2f}%", "Ganancia (ARS)": "${:+,.0f}",
-                    "TIR compra": lambda v: f"{v:.2f}%" if v else "—",
-                }),
+                    "Valor nominal":      lambda v: _fmt_rf(v, "${:,.2f}"),
+                    "Precio compra %":    lambda v: _fmt_rf(v, "{:.2f}%"),
+                    "Precio actual %":    lambda v: _fmt_rf(v, "{:.2f}%"),
+                    "Costo (USD)":        lambda v: _fmt_rf(v, "${:,.2f}"),
+                    "Valor actual (USD)": lambda v: _fmt_rf(v, "${:,.2f}"),
+                    "Ganancia (USD)":     lambda v: _fmt_rf(v, "${:+,.2f}"),
+                    "Ganancia (%)":       lambda v: _fmt_rf(v, "{:+.2f}%"),
+                    "Ganancia (ARS)":     lambda v: _fmt_rf(v, "${:+,.0f}"),
+                    "TIR compra":         lambda v: f"{v:.2f}%" if v and str(v) not in ("nan","None") else "—",
+                }, na_rep="—"),
             use_container_width=True, hide_index=True
         )
     st.markdown("---")
