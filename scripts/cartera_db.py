@@ -471,104 +471,105 @@ def eliminar_movimiento(mov_id: int) -> None:
 def calcular_pnl(cartera_id: int, ccl: float = 1200.0) -> pd.DataFrame:
     """
     Calcula P&L en tiempo real.
-    Para CEDEARs (es_cedear=1):
-      - precio_promedio está en ARS (lo que pagaste en BYMA)
-      - precio actual se obtiene del ticker .BA (cotización ARS en BYMA)
-      - la comparación es ARS vs ARS → P&L correcto sin distorsión
-    Para acciones internacionales (es_cedear=0):
-      - precio_promedio en USD
-      - precio actual en USD desde NYSE/NASDAQ
+    - CEDEARs (es_cedear=1, moneda=ARS): precio via ticker.BA en BYMA
+    - Acciones locales AR (es_cedear=0, moneda=ARS): precio via ticker.BA en BYMA
+    - Acciones internacionales (es_cedear=0, moneda=USD): precio via Yahoo Finance USD
     """
     df_pos = listar_posiciones(cartera_id)
     if df_pos.empty:
         return pd.DataFrame()
 
-    # Descargar precios según tipo de activo
-    precios_usd = {}  # ticker → precio en USD (acciones internacionales)
-    precios_ars = {}  # ticker → precio en ARS (CEDEARs vía .BA)
+    precios_ars = {}  # ticker -> precio en ARS (CEDEARs y locales via .BA)
+    precios_usd = {}  # ticker -> precio en USD (internacionales)
 
     for _, pos in df_pos.iterrows():
-        t         = pos["ticker"]
+        t         = str(pos["ticker"]).upper()
         es_cedear = int(pos.get("es_cedear", 0)) == 1
+        moneda    = str(pos.get("moneda", "USD")).upper()
         try:
-            if es_cedear:
-                # Buscar precio ARS del CEDEAR en BYMA
-                ticker_ba = t.upper() + ".BA" if not t.upper().endswith(".BA") else t.upper()
+            if es_cedear or moneda == "ARS":
+                # Buscar precio ARS en BYMA via ticker.BA
+                ticker_ba = t + ".BA" if not t.endswith(".BA") else t
                 info_ba   = yf.Ticker(ticker_ba).info
                 p_ars     = info_ba.get("currentPrice") or info_ba.get("regularMarketPrice")
                 if p_ars:
                     p_ars_float = float(p_ars)
-                    # Rango razonable para CEDEARs en ARS: $10 a $500.000
-                    # Yahoo Finance a veces devuelve el precio con punto como
-                    # separador de miles (ej: 2790.0 = $2.790 ARS) — correcto.
-                    # Si viene como 2790000 es un error de escala.
-                    if 10 <= p_ars_float <= 500_000:
-                        precios_ars[t] = p_ars_float
-                    elif p_ars_float > 500_000:
-                        # Intentar corregir dividiendo por 1000
+                    # Corregir escala si viene multiplicado por 1000
+                    if p_ars_float > 500_000:
                         p_corregido = p_ars_float / 1000
-                        if 10 <= p_corregido <= 500_000:
-                            precios_ars[t] = p_corregido
-                        else:
-                            precios_ars[t] = p_ars_float / 1_000_000
-            
+                        precios_ars[t] = p_corregido if 10 <= p_corregido <= 500_000 else p_ars_float / 1_000_000
+                    elif p_ars_float >= 10:
+                        precios_ars[t] = p_ars_float
+            else:
+                # Buscar precio USD en Yahoo Finance
+                info  = yf.Ticker(t).info
+                p_usd = info.get("currentPrice") or info.get("regularMarketPrice")
+                if p_usd:
+                    precios_usd[t] = float(p_usd)
         except Exception:
             pass
 
     rows = []
     for _, pos in df_pos.iterrows():
-        t             = pos["ticker"]
+        t             = str(pos["ticker"]).upper()
         cantidad      = float(pos["cantidad"])
         precio_compra = float(pos["precio_promedio"])
-        moneda        = pos["moneda"]
+        moneda        = str(pos.get("moneda", "USD")).upper()
         es_cedear     = int(pos.get("es_cedear", 0)) == 1
+        notas         = pos.get("notas", "") or ""
 
-        if es_cedear:
-            # ── CEDEAR: todo en ARS ──────────────────────────────────────────
+        if es_cedear or moneda == "ARS":
+            # ── CEDEAR o Acción local AR: todo en ARS ────────────────────────
+            tipo_label        = "CEDEAR" if es_cedear else "Local AR"
             precio_actual_ars = precios_ars.get(t)
             costo_ars         = precio_compra * cantidad
             valor_ars         = (precio_actual_ars * cantidad) if precio_actual_ars else None
-            gan_ars           = (valor_ars - costo_ars) if valor_ars else None
-            gan_pct           = (gan_ars / costo_ars * 100) if gan_ars and costo_ars else None
-            # Convertir a USD para comparación entre carteras
-            costo_usd  = costo_ars / ccl if ccl > 0 else None
-            valor_usd  = valor_ars / ccl if valor_ars and ccl > 0 else None
-            gan_usd    = gan_ars / ccl if gan_ars and ccl > 0 else None
-            precio_usd_display = precio_actual_ars / ccl if precio_actual_ars and ccl > 0 else None
+            gan_ars           = (valor_ars - costo_ars) if valor_ars is not None else None
+            gan_pct           = (gan_ars / costo_ars * 100) if gan_ars is not None and costo_ars else None
+            costo_usd         = costo_ars / ccl if ccl > 0 else None
+            valor_usd         = valor_ars / ccl if valor_ars is not None and ccl > 0 else None
+            gan_usd           = gan_ars / ccl if gan_ars is not None and ccl > 0 else None
+            precio_usd_disp   = precio_actual_ars / ccl if precio_actual_ars and ccl > 0 else None
 
             rows.append({
                 "Ticker":              t,
-                "Tipo":                "CEDEAR 🇦🇷",
+                "Tipo":                tipo_label,
                 "Cantidad":            cantidad,
                 "Precio promedio":     round(precio_compra, 2),
                 "Moneda orig.":        "ARS",
                 "Precio actual (ARS)": round(precio_actual_ars, 2) if precio_actual_ars else None,
-                "Precio actual (USD)": round(precio_usd_display, 2) if precio_usd_display else None,
+                "Precio actual (USD)": round(precio_usd_disp, 2) if precio_usd_disp else None,
                 "Costo total (USD)":   round(costo_usd, 2) if costo_usd else None,
-                "Valor actual (USD)":  round(valor_usd, 2) if valor_usd else None,
-                "Ganancia (USD)":      round(gan_usd, 2) if gan_usd else None,
-                "Ganancia (%)":        round(gan_pct, 2) if gan_pct else None,
-                "Ganancia (ARS)":      round(gan_ars, 0) if gan_ars else None,
-                "Notas":               pos.get("notas", ""),
+                "Valor actual (USD)":  round(valor_usd, 2) if valor_usd is not None else None,
+                "Ganancia (USD)":      round(gan_usd, 2) if gan_usd is not None else None,
+                "Ganancia (%)":        round(gan_pct, 2) if gan_pct is not None else None,
+                "Ganancia (ARS)":      round(gan_ars, 0) if gan_ars is not None else None,
+                "Notas":               notas,
             })
-        
-            gan_pct           = (gan_usd / costo_total * 100) if gan_usd and costo_total else None
-            gan_ars           = (gan_usd * ccl) if gan_usd else None
+        else:
+            # ── Acción internacional: todo en USD ────────────────────────────
+            precio_actual_usd = precios_usd.get(t)
+            precio_compra_usd = precio_compra  # ya está en USD
+            costo_total       = precio_compra_usd * cantidad
+            valor_actual      = (precio_actual_usd * cantidad) if precio_actual_usd else None
+            gan_usd           = (valor_actual - costo_total) if valor_actual is not None else None
+            gan_pct           = (gan_usd / costo_total * 100) if gan_usd is not None and costo_total else None
+            gan_ars           = (gan_usd * ccl) if gan_usd is not None else None
 
             rows.append({
                 "Ticker":              t,
-                "Tipo":                "Internacional 🌎",
+                "Tipo":                "Internacional",
                 "Cantidad":            cantidad,
                 "Precio promedio":     round(precio_compra_usd, 2),
-                "Moneda orig.":        moneda,
+                "Moneda orig.":        "USD",
                 "Precio actual (ARS)": None,
                 "Precio actual (USD)": round(precio_actual_usd, 2) if precio_actual_usd else None,
                 "Costo total (USD)":   round(costo_total, 2),
-                "Valor actual (USD)":  round(valor_actual, 2) if valor_actual else None,
-                "Ganancia (USD)":      round(gan_usd, 2) if gan_usd else None,
-                "Ganancia (%)":        round(gan_pct, 2) if gan_pct else None,
-                "Ganancia (ARS)":      round(gan_ars, 0) if gan_ars else None,
-                "Notas":               pos.get("notas", ""),
+                "Valor actual (USD)":  round(valor_actual, 2) if valor_actual is not None else None,
+                "Ganancia (USD)":      round(gan_usd, 2) if gan_usd is not None else None,
+                "Ganancia (%)":        round(gan_pct, 2) if gan_pct is not None else None,
+                "Ganancia (ARS)":      round(gan_ars, 0) if gan_ars is not None else None,
+                "Notas":               notas,
             })
 
     return pd.DataFrame(rows)
