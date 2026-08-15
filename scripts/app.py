@@ -146,9 +146,26 @@ with st.sidebar:
     )
     st.markdown("---")
     
+    _opciones = [
+        # ── Dashboard ──
+        "\U0001f3e0 Inicio",
+        # ── Mi Cartera ──
+        "\U0001f4bc Mi Cartera",
+        "\U0001fa99 Crypto",
+        "\U0001f4c8 Historial P&L",
+        "\U0001f504 Se\u00f1al de Rotaci\u00f3n",
+        # ── An\u00e1lisis ──
+        "\U0001f4ca An\u00e1lisis de Cartera",
+        "\U0001f4c8 An\u00e1lisis T\u00e9cnico",
+        "\U0001f3c6 vs Benchmark",
+        # ── Mercado ──
+        "\U0001f1e6\U0001f1f7 CEDEARs",
+        "\U0001f3e6 Bonos y ON",
+        "\U0001f4f0 Info de Mercado",
+        # ── Configuraci\u00f3n ──
+        "\U0001f514 Alertas y Notif.",
+    ]
     _idx = 0
-    if "_pagina_actual" in st.session_state and st.session_state["_pagina_actual"] in _opciones:
-        _idx = _opciones.index(st.session_state["_pagina_actual"])
     pagina = st.radio(
         "Navegación", _opciones,
         index=_idx,
