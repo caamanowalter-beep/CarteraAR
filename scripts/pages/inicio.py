@@ -1,4 +1,5 @@
 
+
 """
 pages/inicio.py — Dashboard principal con resumen de inversiones por grupo.
 """
@@ -369,6 +370,21 @@ def render():
 
     
 
+    grupos = {
+        "Acciones/CEDEARs": {"valor_usd": 0, "costo_usd": 0, "ganancia_usd": 0,
+                              "ganancia_pct": None, "items": 0, "tiene_precio": True},
+        "Crypto":            {"valor_usd": 0, "costo_usd": 0, "ganancia_usd": 0,
+                              "ganancia_pct": None, "items": 0, "tiene_precio": True},
+        "Renta Fija":        {"valor_usd": 0, "costo_usd": 0, "ganancia_usd": 0,
+                              "ganancia_pct": None, "items": 0, "tiene_precio": False},
+        "FCIs":              {"valor_usd": 0, "costo_usd": 0, "ganancia_usd": 0,
+                              "ganancia_pct": None, "items": 0, "tiene_precio": False},
+        "Dividendos cobrados":{"valor_usd": 0, "costo_usd": 0, "ganancia_usd": 0,
+                               "ganancia_pct": None, "items": 0, "tiene_precio": False},
+        "Saldo disponible":  {"valor_usd": 0, "costo_usd": 0, "ganancia_usd": 0,
+                              "ganancia_pct": None, "items": 0, "tiene_precio": False},
+    }
+
     total_dividendos_usd = 0
     total_saldo_usd = 0
 
@@ -596,5 +612,6 @@ def render():
         c4.metric("Blue",    f"${tc.get('Blue'):,.2f}"          if tc.get('Blue')    else "—")
     except Exception:
         st.metric("CCL", f"${ccl:,.2f}")
+
 
 

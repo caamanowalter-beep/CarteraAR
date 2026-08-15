@@ -208,8 +208,8 @@ def render():
                                          value=float(precio_actual) if precio_actual else 1.0,
                                          step=0.01, format="%.4f")
         exchange_c    = c3.selectbox("Exchange / Billetera",
-                                      ["Binance", "Coinbase", "Kraken", "OKX",
-                                       "Bybit", "Lemon", "Belo", "Ripio",
+                                      ["Binance", "Nexo", "Coinbase", "Kraken",
+                                       "OKX", "Bybit", "Lemon", "Belo", "Ripio",
                                        "Satoshi Tango", "Otro"])
         c4, c5 = st.columns(2)
         fecha_c = c4.date_input("Fecha de compra", value=date.today())
