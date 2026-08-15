@@ -367,18 +367,7 @@ def render():
     # ── Calcular datos por grupo ──────────────────────────────────────────────
     
 
-    grupos = {
-        "Acciones/CEDEARs": {"valor_usd": 0, "costo_usd": 0, "ganancia_usd": 0,
-                              "ganancia_pct": None, "items": 0, "tiene_precio": True},
-        "Renta Fija":        {"valor_usd": 0, "costo_usd": 0, "ganancia_usd": 0,
-                              "ganancia_pct": None, "items": 0, "tiene_precio": False},
-        "FCIs":              {"valor_usd": 0, "costo_usd": 0, "ganancia_usd": 0,
-                              "ganancia_pct": None, "items": 0, "tiene_precio": False},
-        "Dividendos cobrados":{"valor_usd": 0, "costo_usd": 0, "ganancia_usd": 0,
-                               "ganancia_pct": None, "items": 0, "tiene_precio": False},
-        "Saldo disponible":  {"valor_usd": 0, "costo_usd": 0, "ganancia_usd": 0,
-                              "ganancia_pct": None, "items": 0, "tiene_precio": False},
-    }
+    
 
     total_dividendos_usd = 0
     total_saldo_usd = 0
@@ -397,6 +386,47 @@ def render():
             pass
 
         
+
+        # Crypto
+        try:
+            df_crypto = cartera_db.calcular_pnl_crypto(cid, ccl=ccl)
+            if not df_crypto.empty:
+                grupos["Crypto"]["valor_usd"] += df_crypto["Valor actual (USD)"].dropna().sum()
+                grupos["Crypto"]["costo_usd"]  += df_crypto["Costo (USD)"].sum()
+                gan_crypto = df_crypto["Ganancia (USD)"].dropna()
+                if not gan_crypto.empty:
+                    grupos["Crypto"]["ganancia_usd"] += gan_crypto.sum()
+                grupos["Crypto"]["items"] += len(df_crypto)
+        except Exception:
+            pass
+
+        # Renta fija
+        try:
+            df_rf = cartera_db.calcular_pnl_renta_fija(cid, ccl=ccl)
+            if not df_rf.empty:
+                grupos["Renta Fija"]["valor_usd"] += df_rf["Valor actual (USD)"].dropna().sum()
+                grupos["Renta Fija"]["costo_usd"]  += df_rf["Costo (USD)"].sum()
+                gan_rf = df_rf["Ganancia (USD)"].dropna()
+                if not gan_rf.empty:
+                    grupos["Renta Fija"]["ganancia_usd"] += gan_rf.sum()
+                    grupos["Renta Fija"]["tiene_precio"] = True
+                grupos["Renta Fija"]["items"] += len(df_rf)
+        except Exception:
+            pass
+
+        # FCIs
+        try:
+            df_fci = cartera_db.calcular_pnl_fci(cid, ccl=ccl)
+            if not df_fci.empty:
+                grupos["FCIs"]["valor_usd"] += df_fci["Valor actual (USD)"].dropna().sum()
+                grupos["FCIs"]["costo_usd"]  += df_fci["Costo (USD)"].sum()
+                gan_fci = df_fci["Ganancia (USD)"].dropna()
+                if not gan_fci.empty:
+                    grupos["FCIs"]["ganancia_usd"] += gan_fci.sum()
+                    grupos["FCIs"]["tiene_precio"] = True
+                grupos["FCIs"]["items"] += len(df_fci)
+        except Exception:
+            pass
 
         # Dividendos
         try:
@@ -566,4 +596,5 @@ def render():
         c4.metric("Blue",    f"${tc.get('Blue'):,.2f}"          if tc.get('Blue')    else "—")
     except Exception:
         st.metric("CCL", f"${ccl:,.2f}")
+
 

@@ -1337,3 +1337,129 @@ def calcular_valor_bonos_cartera(cartera_id: int, ccl: float = 1200.0) -> pd.Dat
         })
     return pd.DataFrame(rows)
 
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CRYPTO — Criptomonedas
+# ═══════════════════════════════════════════════════════════════════════════════
+
+CRYPTO_IDS = {
+    "BTC": "bitcoin", "ETH": "ethereum", "USDT": "tether", "BNB": "binancecoin",
+    "SOL": "solana", "XRP": "ripple", "USDC": "usd-coin", "ADA": "cardano",
+    "AVAX": "avalanche-2", "DOGE": "dogecoin", "DOT": "polkadot", "MATIC": "matic-network",
+    "LINK": "chainlink", "UNI": "uniswap", "LTC": "litecoin", "BCH": "bitcoin-cash",
+    "ATOM": "cosmos", "XLM": "stellar", "ALGO": "algorand", "VET": "vechain",
+    "NEAR": "near", "FTM": "fantom", "SAND": "the-sandbox", "MANA": "decentraland",
+    "AXS": "axie-infinity", "SHIB": "shiba-inu", "TRX": "tron", "ETC": "ethereum-classic",
+}
+
+def agregar_crypto(cartera_id: int, simbolo: str, cantidad: float,
+                   precio_compra_usd: float, exchange: str = "Binance",
+                   fecha_compra: str = None, nombre: str = None, notas: str = "") -> None:
+    if fecha_compra is None:
+        fecha_compra = date.today().strftime("%Y-%m-%d")
+    simbolo = simbolo.upper()
+    if USE_POSTGRES:
+        _execute("""
+            INSERT INTO crypto
+                (cartera_id, simbolo, nombre, cantidad, precio_compra_usd,
+                 exchange, fecha_compra, notas)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (cartera_id, simbolo) DO UPDATE SET
+                cantidad=EXCLUDED.cantidad,
+                precio_compra_usd=EXCLUDED.precio_compra_usd,
+                exchange=EXCLUDED.exchange,
+                fecha_compra=EXCLUDED.fecha_compra,
+                notas=EXCLUDED.notas
+        """, (cartera_id, simbolo, nombre or simbolo, cantidad,
+              precio_compra_usd, exchange, fecha_compra, notas))
+    else:
+        _execute("""
+            INSERT INTO crypto
+                (cartera_id, simbolo, nombre, cantidad, precio_compra_usd,
+                 exchange, fecha_compra, notas)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(cartera_id, simbolo) DO UPDATE SET
+                cantidad=excluded.cantidad,
+                precio_compra_usd=excluded.precio_compra_usd,
+                exchange=excluded.exchange,
+                fecha_compra=excluded.fecha_compra,
+                notas=excluded.notas
+        """, (cartera_id, simbolo, nombre or simbolo, cantidad,
+              precio_compra_usd, exchange, fecha_compra, notas))
+
+def eliminar_crypto(cartera_id: int, simbolo: str) -> None:
+    _execute("DELETE FROM crypto WHERE cartera_id=? AND simbolo=?",
+             (cartera_id, simbolo.upper()))
+
+def listar_crypto(cartera_id: int) -> pd.DataFrame:
+    return _read_sql(
+        "SELECT * FROM crypto WHERE cartera_id=? ORDER BY simbolo",
+        [cartera_id]
+    )
+
+def obtener_precios_crypto(simbolos: list) -> dict:
+    """
+    Obtiene precios actuales en USD desde CoinGecko API (gratuita).
+    Retorna dict {simbolo: precio_usd}
+    """
+    import requests as _req
+    precios = {}
+    if not simbolos:
+        return precios
+    # Mapear simbolos a IDs de CoinGecko
+    ids_map = {}
+    for s in simbolos:
+        s_upper = s.upper()
+        cg_id = CRYPTO_IDS.get(s_upper)
+        if cg_id:
+            ids_map[cg_id] = s_upper
+    if not ids_map:
+        return precios
+    ids_str = ",".join(ids_map.keys())
+    try:
+        url = f"https://api.coingecko.com/api/v3/simple/price?ids={ids_str}&vs_currencies=usd"
+        r = _req.get(url, timeout=10, headers={"Accept": "application/json"})
+        if r.status_code == 200:
+            data = r.json()
+            for cg_id, simbolo in ids_map.items():
+                if cg_id in data:
+                    precios[simbolo] = float(data[cg_id]["usd"])
+    except Exception:
+        pass
+    return precios
+
+def calcular_pnl_crypto(cartera_id: int, ccl: float = 1200.0) -> pd.DataFrame:
+    """Calcula P&L de criptomonedas en tiempo real."""
+    df = listar_crypto(cartera_id)
+    if df.empty:
+        return pd.DataFrame()
+    simbolos = df["simbolo"].str.upper().tolist()
+    precios_usd = obtener_precios_crypto(simbolos)
+    rows = []
+    for _, pos in df.iterrows():
+        simbolo       = str(pos["simbolo"]).upper()
+        cantidad      = float(pos["cantidad"])
+        precio_compra = float(pos["precio_compra_usd"])
+        exchange      = str(pos.get("exchange", ""))
+        notas         = str(pos.get("notas", "") or "")
+        precio_actual = precios_usd.get(simbolo)
+        costo_usd     = precio_compra * cantidad
+        valor_usd     = (precio_actual * cantidad) if precio_actual else None
+        gan_usd       = (valor_usd - costo_usd) if valor_usd is not None else None
+        gan_pct       = (gan_usd / costo_usd * 100) if (gan_usd is not None and costo_usd > 0) else None
+        gan_ars       = (gan_usd * ccl) if gan_usd is not None else None
+        rows.append({
+            "Simbolo":            simbolo,
+            "Cantidad":           cantidad,
+            "Precio compra (USD)": round(precio_compra, 4),
+            "Precio actual (USD)": round(precio_actual, 4) if precio_actual else None,
+            "Costo (USD)":        round(costo_usd, 2),
+            "Valor actual (USD)": round(valor_usd, 2) if valor_usd is not None else None,
+            "Ganancia (USD)":     round(gan_usd, 2) if gan_usd is not None else None,
+            "Ganancia (%)":       round(gan_pct, 2) if gan_pct is not None else None,
+            "Ganancia (ARS)":     round(gan_ars, 0) if gan_ars is not None else None,
+            "Exchange":           exchange,
+            "Notas":              notas,
+        })
+    return pd.DataFrame(rows)

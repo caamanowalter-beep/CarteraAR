@@ -187,6 +187,7 @@ _PAGINAS = {
     "📈 Análisis Técnico":   "pages.tecnico",
     "🇦🇷 CEDEARs":          "pages.cedears",
     "💼 Mi Cartera":         "pages.mi_cartera",
+    "🪙 Crypto":             "pages.crypto",
     "📈 Historial P&L":      "pages.historial",
     "🏆 vs Benchmark":       "pages.benchmark",
     "🔄 Señal de Rotación":  "pages.rotacion",
