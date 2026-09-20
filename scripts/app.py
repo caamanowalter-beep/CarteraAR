@@ -58,6 +58,32 @@ st.markdown("""
     h2 { font-size: 16px !important; margin-bottom: 5px !important; }
     h3 { font-size: 14px !important; margin-bottom: 4px !important; }
     h4 { font-size: 13px !important; margin-bottom: 3px !important; }
+    /* ── Sliders compactos ── */
+    [data-testid="stSlider"] > div { padding: 0 !important; }
+    [data-testid="stSlider"] label { font-size: 10px !important; margin-bottom: 0 !important; }
+    [data-testid="stSlider"] [data-testid="stMarkdownContainer"] p { font-size: 10px !important; }
+    .stSlider > div > div > div { height: 4px !important; }
+    .stSlider > div > div > div > div { height: 12px !important; width: 12px !important; }
+
+    /* ── Checkbox compacto ── */
+    .stCheckbox label { font-size: 11px !important; }
+    .stCheckbox > label > div { transform: scale(0.85); }
+
+    /* ── Sidebar sliders y controles ── */
+    [data-testid="stSidebar"] .stSlider label { font-size: 10px !important; }
+    [data-testid="stSidebar"] .stSelectbox label { font-size: 10px !important; }
+    [data-testid="stSidebar"] .stTextInput label { font-size: 10px !important; }
+    [data-testid="stSidebar"] .stNumberInput label { font-size: 10px !important; }
+    [data-testid="stSidebar"] h3 { font-size: 12px !important; margin: 4px 0 !important; }
+    [data-testid="stSidebar"] h4 { font-size: 11px !important; margin: 3px 0 !important; }
+    [data-testid="stSidebar"] p { font-size: 11px !important; }
+    [data-testid="stSidebar"] .stButton > button { 
+        min-height: 28px !important; font-size: 11px !important; padding: 2px 8px !important;
+    }
+
+    /* ── Expander compacto ── */
+    .streamlit-expanderHeader { font-size: 11px !important; padding: 4px 8px !important; }
+
     @media (max-width: 768px) {
         .block-container { padding-left: 0.8rem !important; padding-right: 0.8rem !important; }
         div[data-testid="stMetricValue"] > div { font-size: 15px !important; }
