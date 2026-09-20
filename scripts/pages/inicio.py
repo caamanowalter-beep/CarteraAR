@@ -48,7 +48,7 @@ def _card_metrica(titulo: str, valor: str, subtitulo: str = "",
         unsafe_allow_html=True
     )
 
-CHART_HEIGHT = 360  # altura uniforme para todos los gráficos del dashboard
+CHART_HEIGHT = 240  # altura compacta para visualización al 100%board
 
 def _grafico_composicion_total(grupos: dict) -> go.Figure:
     """Gráfico de torta con composición total de la cartera."""
@@ -311,21 +311,31 @@ def _vista_movil_rapida(df_carteras, ccl):
 
 def render():
     uid = _get_user_id()
-    # Header compacto — sin logo (ya está en sidebar)
-    if uid and AUTH_OK and _auth.esta_logueado():
-        try:
-            u = _auth.get_usuario_actual()
-            nombre = u.get("nombre", "") if u else ""
-            st.markdown(
-                f'<div style="margin-bottom:4px">'
-                f'<span style="font-size:20px;font-weight:700;color:white">'
-                f'Dashboard — {nombre}</span></div>',
-                unsafe_allow_html=True
-            )
-        except Exception:
-            st.markdown("### Dashboard")
-    else:
-        st.markdown("### Dashboard")
+    # Header compacto con link a Financieramente
+    col_h1, col_h2 = st.columns([3, 1])
+    with col_h1:
+        if uid and AUTH_OK and _auth.esta_logueado():
+            try:
+                u = _auth.get_usuario_actual()
+                nombre = u.get("nombre", "") if u else ""
+                st.markdown(
+                    f'<span style="font-size:18px;font-weight:700;color:white">'
+                    f'Dashboard — {nombre}</span>',
+                    unsafe_allow_html=True
+                )
+            except Exception:
+                st.markdown("**Dashboard**")
+        else:
+            st.markdown("**Dashboard**")
+    with col_h2:
+        st.markdown(
+            '<div style="text-align:right;padding-top:4px">'
+            '<a href="https://www.instagram.com/financieramente.ok" target="_blank" '
+            'style="color:#4f8ef7;font-size:12px;text-decoration:none;'
+            'background:#1e2130;padding:4px 10px;border-radius:6px;border:1px solid #4f8ef7">'
+            '📸 @financieramente.ok</a></div>',
+            unsafe_allow_html=True
+        )
 
     df_carteras = cartera_db.listar_carteras(usuario_id=uid)
 
@@ -521,8 +531,8 @@ def render():
                 pct_total = (g["valor_usd"] / total_valor * 100) if total_valor > 0 else 0
 
                 st.markdown(
-                    f'<div style="background:{BG_CARD};padding:14px 16px;border-radius:10px;'
-                    f'border-left:4px solid {color_grupo};margin-bottom:10px">'
+                    f'<div style="background:{BG_CARD};padding:8px 12px;border-radius:8px;'
+                    f'border-left:4px solid {color_grupo};margin-bottom:6px">'
                     f'<div style="color:#aaa;font-size:11px">{nombre}</div>'
                     f'<div style="color:white;font-size:20px;font-weight:700">'
                     f'${g["valor_usd"]:,.2f} USD</div>'
