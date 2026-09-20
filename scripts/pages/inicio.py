@@ -374,7 +374,7 @@ def render():
 
     tc_data = _obtener_tc_cached()
     if tc_data:
-        ccl_v   = tc_data.get("CCL", ccl)
+        ccl_v   = tc_data.get("CCL") or tc_data.get("ccl") or 1580
         mep_v   = tc_data.get("MEP")
         blue_v  = tc_data.get("Blue")
         ofic_v  = tc_data.get("Oficial")
