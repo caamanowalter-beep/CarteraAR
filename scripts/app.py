@@ -193,8 +193,7 @@ with st.sidebar:
     st.markdown("---")
     st.caption("v3.0 — Financieramente.ok")
 
-    if AUTH_DISPONIBLE:
-        auth.render_usuario_sidebar()
+    # Info usuario ya mostrada arriba del sidebar
 
 # ── Enrutamiento ──────────────────────────────────────────────────────────────
 import importlib

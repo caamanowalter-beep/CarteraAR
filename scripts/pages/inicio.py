@@ -310,28 +310,22 @@ def _vista_movil_rapida(df_carteras, ccl):
 
 
 def render():
-    # Header con logo
-    import os
-    logo_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logo_financieramente.png")
-    col_logo, col_titulo = st.columns([1, 5])
-    with col_logo:
-        if os.path.exists(logo_path):
-            st.image(logo_path, width=70)
-    with col_titulo:
-        st.markdown(
-            '<div style="padding-top:8px">'
-            '<span style="font-size:26px;font-weight:700;color:white">Cartera AR</span><br>'
-            '<a href="https://www.instagram.com/financieramente.ok?igsh=MTFkbDJwdDEzNWYzcA==" '
-            'target="_blank" style="color:#4f8ef7;font-size:13px;text-decoration:none">'
-            '📸 @financieramente.ok</a>'
-            '</div>',
-            unsafe_allow_html=True
-        )
-
     uid = _get_user_id()
+    # Header compacto — sin logo (ya está en sidebar)
     if uid and AUTH_OK and _auth.esta_logueado():
-        u = _auth.get_usuario_actual()
-        st.markdown(f"Bienvenido, **{u['nombre']}** 👋")
+        try:
+            u = _auth.get_usuario_actual()
+            nombre = u.get("nombre", "") if u else ""
+            st.markdown(
+                f'<div style="margin-bottom:4px">'
+                f'<span style="font-size:20px;font-weight:700;color:white">'
+                f'Dashboard — {nombre}</span></div>',
+                unsafe_allow_html=True
+            )
+        except Exception:
+            st.markdown("### Dashboard")
+    else:
+        st.markdown("### Dashboard")
 
     df_carteras = cartera_db.listar_carteras(usuario_id=uid)
 
