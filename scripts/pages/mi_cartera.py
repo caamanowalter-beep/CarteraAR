@@ -426,7 +426,7 @@ def _tab_movimientos(cartera_id: int, nombre: str):
     if key_tipo_mov not in st.session_state:
         st.session_state[key_tipo_mov] = "COMPRA"
 
-    col_tipo1, col_tipo2 = st.columns(2)
+    _, col_tipo1, col_tipo2, _ = st.columns([2, 1, 1, 2])
     if col_tipo1.button("COMPRA", key=f"btn_compra_{cartera_id}",
                         use_container_width=True,
                         type="primary" if st.session_state[key_tipo_mov] == "COMPRA" else "secondary"):
@@ -442,8 +442,8 @@ def _tab_movimientos(cartera_id: int, nombre: str):
     color_tipo = "#00c896" if tipo == "COMPRA" else "#f74f4f"
     st.markdown(
         f'<div style="background:{color_tipo}22;border-left:3px solid {color_tipo};'
-        f'padding:6px 12px;border-radius:6px;margin-bottom:8px;font-weight:600;color:{color_tipo}">'
-        f'Modo activo: {tipo}</div>',
+        f'padding:3px 8px;border-radius:4px;margin-bottom:4px;font-size:11px;color:{color_tipo}">'
+        f'Modo: {tipo}</div>',
         unsafe_allow_html=True
     )
 
