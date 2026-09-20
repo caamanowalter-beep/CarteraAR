@@ -128,8 +128,41 @@ if AUTH_DISPONIBLE:
 if "_nav_override" in st.session_state:
     _nav_target = st.session_state.pop("_nav_override")
     st.session_state["_pagina_actual"] = _nav_target
-
-
+with st.sidebar:
+    import os
+    logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logo_financieramente.png")
+    col_logo, col_title = st.columns([1, 3])
+    with col_logo:
+        if os.path.exists(logo_path):
+            st.image(logo_path, width=55)
+    with col_title:
+        st.markdown(
+            '<div style="padding-top:4px">'
+            '<span style="font-size:17px;font-weight:700;color:#e2e8f0">Cartera AR</span><br>'
+            '<a href="https://www.instagram.com/financieramente.ok" '
+            'target="_blank" style="color:#4f8ef7;font-size:11px;text-decoration:none">'
+            '@financieramente.ok</a></div>',
+            unsafe_allow_html=True
+        )
+    if AUTH_DISPONIBLE and auth.esta_logueado():
+        try:
+            u = auth.get_usuario_actual()
+            if u:
+                st.markdown(
+                    f'<div style="background:#1e2130;padding:7px 10px;border-radius:8px;'
+                    f'margin:6px 0;border-left:3px solid #4f8ef7">'
+                    f'<div style="color:#aaa;font-size:10px">Usuario</div>'
+                    f'<div style="color:#e2e8f0;font-size:12px;font-weight:600">{u.get("nombre","")}</div>'
+                    f'<div style="color:#aaa;font-size:10px">{u.get("email","")}</div></div>',
+                    unsafe_allow_html=True
+                )
+                if st.button("Cerrar sesion", key="btn_logout_top",
+                             use_container_width=True, type="secondary"):
+                    auth.logout()
+                    st.rerun()
+        except Exception:
+            pass
+    st.markdown("---")
     
     _opciones = [
         # ── Dashboard ──
