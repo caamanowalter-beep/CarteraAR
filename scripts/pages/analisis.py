@@ -369,7 +369,10 @@ def render():
             prog.empty()
 
         fund_df = pd.DataFrame(fund_rows)
-        st.dataframe(
+        if fund_df.empty:
+            st.info("No hay datos fundamentales disponibles.")
+        else:
+         st.dataframe(
             fund_df.style.format({
                 "Margen Neto": _fmt_pct,
                 "ROIC":        _fmt_pct,
