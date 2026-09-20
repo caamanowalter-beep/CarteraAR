@@ -312,30 +312,31 @@ def _vista_movil_rapida(df_carteras, ccl):
 def render():
     uid = _get_user_id()
     # Header compacto con link a Financieramente
-    col_h1, col_h2 = st.columns([3, 1])
-    with col_h1:
-        if uid and AUTH_OK and _auth.esta_logueado():
-            try:
-                u = _auth.get_usuario_actual()
-                nombre = u.get("nombre", "") if u else ""
-                st.markdown(
-                    f'<span style="font-size:18px;font-weight:700;color:white">'
-                    f'Dashboard — {nombre}</span>',
-                    unsafe_allow_html=True
-                )
-            except Exception:
-                st.markdown("**Dashboard**")
-        else:
-            st.markdown("**Dashboard**")
-    with col_h2:
-        st.markdown(
-            '<div style="text-align:right;padding-top:4px">'
-            '<a href="https://www.instagram.com/financieramente.ok" target="_blank" '
-            'style="color:#4f8ef7;font-size:12px;text-decoration:none;'
-            'background:#1e2130;padding:4px 10px;border-radius:6px;border:1px solid #4f8ef7">'
-            '📸 @financieramente.ok</a></div>',
-            unsafe_allow_html=True
-        )
+    # ── Header con identidad Financieramente ────────────────────────────────
+    nombre_usuario = ""
+    if uid and AUTH_OK and _auth.esta_logueado():
+        try:
+            u = _auth.get_usuario_actual()
+            nombre_usuario = u.get("nombre", "") if u else ""
+        except Exception:
+            pass
+
+    st.markdown(
+        f'<div style="background:linear-gradient(135deg,#0f1117 0%,#1a2744 50%,#0f1117 100%);'
+        f'padding:12px 16px;border-radius:10px;margin-bottom:8px;'
+        f'border-left:4px solid #4f8ef7;border-right:1px solid #00c896">'
+        f'<div style="display:flex;justify-content:space-between;align-items:center">'
+        f'<div>'
+        f'<span style="font-size:16px;font-weight:700;color:#4f8ef7">Cartera AR</span>'
+        f'<span style="color:#aaa;font-size:12px;margin-left:8px">— Dashboard</span>'
+        + (f'<span style="color:#e2e8f0;font-size:12px;margin-left:6px">| {nombre_usuario}</span>' if nombre_usuario else '')
+        + f'</div>'
+        f'<a href="https://www.instagram.com/financieramente.ok" target="_blank" '
+        f'style="color:#00c896;font-size:11px;text-decoration:none">'
+        f'@financieramente.ok</a>'
+        f'</div></div>',
+        unsafe_allow_html=True
+    )
 
     df_carteras = cartera_db.listar_carteras(usuario_id=uid)
 
@@ -547,9 +548,9 @@ def render():
                 gan_str = f"{gan_pct:+.2f}%" if gan_pct is not None else "—"
                 gan_color = COLOR_VERDE if (gan_pct or 0) >= 0 else COLOR_ROJO
                 color_grupo = {
-                    "Acciones/CEDEARs":    COLOR_AZUL,
-                    "Renta Fija":          COLOR_NARANJA,
-                    "FCIs":                COLOR_VERDE,
+                    "Acciones/CEDEARs":    "#4f8ef7",
+                    "Renta Fija":          "#f7a34f",
+                    "FCIs":                "#00c896",
                     "Dividendos cobrados": "#9b59b6",
                     "Saldo disponible":    COLOR_GRIS,
                 }.get(nombre, COLOR_AZUL)

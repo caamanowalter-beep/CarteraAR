@@ -123,27 +123,7 @@ def _tab_gestionar_carteras():
 
     df_carteras = cartera_db.listar_carteras()
 
-    if not df_carteras.empty:
-        for _, row in df_carteras.iterrows():
-            c1, c2, c3 = st.columns([4, 2, 1])
-            c1.markdown(
-                f'<div style="background:{BG_CARD};padding:10px 14px;'
-                f'border-radius:8px;border-left:3px solid {COLOR_AZUL}">'
-                f'<span style="color:white;font-weight:700">{row["nombre"]}</span>'
-                f'&nbsp;&nbsp;<span style="color:#aaa;font-size:12px">'
-                f'{row["descripcion"] or ""}</span><br>'
-                f'<span style="color:{COLOR_AZUL};font-size:12px">'
-                f'Moneda base: {row["moneda_base"]} | Creada: {row["creada"]}</span>'
-                f'</div>',
-                unsafe_allow_html=True
-            )
-            c2.write("")
-            if c3.button("🗑️", key=f"del_cart_{row['id']}",
-                         help="Eliminar cartera"):
-                cartera_db.eliminar_cartera(row["id"])
-                st.rerun()
-    else:
-        st.info("No tenés carteras creadas todavía.")
+    
 
     st.markdown("---")
     st.markdown("### ➕ Crear nueva cartera")
