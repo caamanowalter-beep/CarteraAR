@@ -14,99 +14,50 @@ st.set_page_config(
 # ── Estilos globales + UX móvil ──────────────────────────────────────────────
 st.markdown("""
 <style>
-    /* ── Ocultar nav automática ── */
     [data-testid="stSidebarNav"] { display: none !important; }
-
-    /* ── Sidebar oscuro ── */
     [data-testid="stSidebar"] { background-color: #1a1f2e !important; }
     [data-testid="stSidebar"] * { color: #e2e8f0 !important; }
     [data-testid="stSidebar"] .stRadio label {
-        color: #e2e8f0 !important;
-        font-size: 15px !important;
-        padding: 6px 0 !important;
-        min-height: 36px !important;  /* botones más grandes en móvil */
+        color: #e2e8f0 !important; font-size: 13px !important;
+        padding: 4px 0 !important; min-height: 28px !important;
     }
     [data-testid="stSidebar"] hr { border-color: #2d3748 !important; }
-
-    /* ── Métricas ── */
-    .metric-card {
-        background: #1e2130; border-radius: 10px;
-        padding: 16px 20px; margin-bottom: 10px;
-    }
-    div[data-testid="stMetricValue"] > div { font-size: 24px; }
-
-    /* ── Tabs más grandes en móvil ── */
+    div[data-testid="stMetricValue"] > div { font-size: 17px !important; }
+    div[data-testid="stMetricLabel"] { font-size: 11px !important; }
+    div[data-testid="stMetricDelta"] { font-size: 11px !important; }
     .stTabs [data-baseweb="tab"] {
-        font-size: 13px !important;
-        padding: 8px 10px !important;
-        min-height: 40px !important;
+        font-size: 12px !important; padding: 5px 8px !important; min-height: 30px !important;
     }
-
-    /* ── Tablas responsivas ── */
-    [data-testid="stDataFrame"] {
-        overflow-x: auto !important;
-        -webkit-overflow-scrolling: touch !important;
-    }
-    [data-testid="stDataFrame"] table {
-        font-size: 12px !important;
-    }
+    [data-testid="stDataFrame"] { overflow-x: auto !important; }
+    [data-testid="stDataFrame"] table { font-size: 11px !important; }
     [data-testid="stDataFrame"] th {
-        font-size: 11px !important;
-        white-space: nowrap !important;
-        padding: 4px 6px !important;
+        font-size: 10px !important; white-space: nowrap !important; padding: 3px 5px !important;
     }
-    [data-testid="stDataFrame"] td {
-        font-size: 12px !important;
-        padding: 4px 6px !important;
-    }
-
-    /* ── Botones más grandes en móvil ── */
+    [data-testid="stDataFrame"] td { font-size: 11px !important; padding: 3px 5px !important; }
     .stButton > button {
-        min-height: 44px !important;
-        font-size: 14px !important;
-        border-radius: 8px !important;
+        min-height: 32px !important; font-size: 12px !important;
+        border-radius: 6px !important; padding: 3px 10px !important;
     }
-
-    /* ── Inputs más grandes ── */
-    .stTextInput input, .stNumberInput input, .stSelectbox select {
-        min-height: 40px !important;
-        font-size: 14px !important;
+    .stTextInput input, .stNumberInput input {
+        min-height: 30px !important; font-size: 12px !important; padding: 3px 8px !important;
     }
-
-    /* ── Formularios más compactos en móvil ── */
+    .stSelectbox > div > div { min-height: 30px !important; font-size: 12px !important; }
+    .stSelectbox label, .stTextInput label, .stNumberInput label,
+    .stDateInput label, .stSlider label {
+        font-size: 11px !important; margin-bottom: 1px !important;
+    }
+    .block-container {
+        padding-top: 0.8rem !important; padding-bottom: 0.8rem !important;
+        max-width: 1200px !important;
+    }
+    h1 { font-size: 19px !important; margin-bottom: 6px !important; }
+    h2 { font-size: 16px !important; margin-bottom: 5px !important; }
+    h3 { font-size: 14px !important; margin-bottom: 4px !important; }
+    h4 { font-size: 13px !important; margin-bottom: 3px !important; }
     @media (max-width: 768px) {
-        /* Reducir padding en móvil */
-        .block-container {
-            padding-left: 1rem !important;
-            padding-right: 1rem !important;
-            padding-top: 1rem !important;
-        }
-        /* Métricas más compactas */
-        div[data-testid="stMetricValue"] > div { font-size: 18px !important; }
-        div[data-testid="stMetricLabel"] { font-size: 11px !important; }
-        /* Tabs más pequeños */
-        .stTabs [data-baseweb="tab"] {
-            font-size: 11px !important;
-            padding: 6px 6px !important;
-        }
-        /* Ocultar columnas menos importantes en tablas */
-        .hide-mobile { display: none !important; }
-    }
-
-    /* ── Gráficos responsivos ── */
-    .js-plotly-plot {
-        width: 100% !important;
-    }
-
-    /* ── Cards de información ── */
-    div[style*="border-radius:10px"] {
-        margin-bottom: 8px !important;
-    }
-
-    /* ── Expanders más compactos ── */
-    .streamlit-expanderHeader {
-        font-size: 14px !important;
-        min-height: 40px !important;
+        .block-container { padding-left: 0.8rem !important; padding-right: 0.8rem !important; }
+        div[data-testid="stMetricValue"] > div { font-size: 15px !important; }
+        .stTabs [data-baseweb="tab"] { font-size: 10px !important; padding: 4px 5px !important; }
     }
 </style>
 """, unsafe_allow_html=True)
