@@ -521,45 +521,53 @@ def calcular_pnl(cartera_id: int, ccl: float = 1200.0) -> pd.DataFrame:
         moneda    = str(pos.get("moneda", "USD")).upper()
         try:
             if es_cedear or moneda == "ARS":
-                # Buscar precio ARS en BYMA via ticker.BA
-                ticker_ba = t + ".BA" if not t.endswith(".BA") else t
-                info_ba   = yf.Ticker(ticker_ba).info
-                p_ars     = info_ba.get("currentPrice") or info_ba.get("regularMarketPrice")
-                if p_ars:
-                    p_ars_float = float(p_ars)
-                    # Corregir escala si viene multiplicado por 1000
-                    if p_ars_float > 500_000:
-                        p_corregido = p_ars_float / 1000
-                        precios_ars[t] = p_corregido if 10 <= p_corregido <= 500_000 else p_ars_float / 1_000_000
-                    elif p_ars_float >= 10:
-                        precios_ars[t] = p_ars_float
+                # Para CEDEARs: obtener precio USD via FMP y convertir a ARS via CCL
+                # Esto es más preciso que el precio .BA de Yahoo (que puede venir en USD)
+                pass  # se obtiene en batch FMP abajo
             else:
-                # Buscar precio USD en Yahoo Finance
-                info  = yf.Ticker(t).info
-                p_usd = info.get("currentPrice") or info.get("regularMarketPrice")
-                if p_usd:
-                    precios_usd[t] = float(p_usd)
+                # Buscar precio USD en Yahoo Finance (fallback, FMP se hace en batch)
+                pass
         except Exception:
             pass
 
-    # Obtener precios USD en batch desde FMP (más confiable que Yahoo)
-    tickers_usd_needed = [
-        str(pos["ticker"]).upper()
-        for _, pos in df_pos.iterrows()
-        if int(pos.get("es_cedear", 0)) == 0 and str(pos.get("moneda","USD")).upper() == "USD"
-        and str(pos["ticker"]).upper() not in precios_usd
-    ]
-    if tickers_usd_needed:
-        fmp_prices = _obtener_precios_fmp(tickers_usd_needed)
-        precios_usd.update(fmp_prices)
-        # Fallback Yahoo Finance para los que FMP no devolvió
-        for t_usd in tickers_usd_needed:
-            if t_usd not in precios_usd:
+    # Obtener TODOS los precios en batch desde FMP
+    all_tickers = [str(pos["ticker"]).upper() for _, pos in df_pos.iterrows()]
+    fmp_all = _obtener_precios_fmp(all_tickers)
+
+    for _, pos in df_pos.iterrows():
+        t_b = str(pos["ticker"]).upper()
+        es_ced = int(pos.get("es_cedear", 0)) == 1
+        mon = str(pos.get("moneda","USD")).upper()
+
+        if es_ced or mon == "ARS":
+            # CEDEAR/Local: precio USD de FMP × CCL = precio ARS estimado
+            if t_b in fmp_all and fmp_all[t_b] > 0:
+                precios_ars[t_b] = fmp_all[t_b] * ccl
+            else:
+                # Fallback: Yahoo Finance .BA
                 try:
-                    info = yf.Ticker(t_usd).info
+                    ticker_ba = t_b + ".BA" if not t_b.endswith(".BA") else t_b
+                    info_ba = yf.Ticker(ticker_ba).info
+                    p_ars = info_ba.get("currentPrice") or info_ba.get("regularMarketPrice")
+                    if p_ars and float(p_ars) >= 10:
+                        p_f = float(p_ars)
+                        # Si el precio parece estar en USD (< 1000), convertir a ARS
+                        if p_f < 1000:
+                            precios_ars[t_b] = p_f * ccl
+                        else:
+                            precios_ars[t_b] = p_f
+                except Exception:
+                    pass
+        else:
+            # Internacional USD: usar FMP directo
+            if t_b in fmp_all:
+                precios_usd[t_b] = fmp_all[t_b]
+            else:
+                try:
+                    info = yf.Ticker(t_b).info
                     p = info.get("currentPrice") or info.get("regularMarketPrice")
                     if p:
-                        precios_usd[t_usd] = float(p)
+                        precios_usd[t_b] = float(p)
                 except Exception:
                     pass
 
