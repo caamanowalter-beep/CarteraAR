@@ -296,13 +296,9 @@ def render():
                 if mdd     is not None: st.metric("Max Drawdown",     f"{mdd:.1f}%")
 
     # ── Tabs de contenido ─────────────────────────────────────────────────────
-    # Inicializar variables para evitar UnboundLocalError
-    fund_rows = []
-    fund_df   = pd.DataFrame()
-
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "Frontera Eficiente", "Pesos", "Correlaciones",
-        "Estadísticas", "Fundamentales", "Score Buffett"
+        "Estadísticas", "Score Buffett"
     ])
 
     with tab1:
@@ -339,56 +335,7 @@ def render():
                          use_container_width=True, hide_index=True)
 
     
-            fund_rows = []
-            prog = st.progress(0)
-            for i, t in enumerate(tickers_ok):
-                info = core.obtener_fundamentales(t)
-                rec  = core.evaluar_recomendacion(
-                    info.get("profitMargins"),
-                    info.get("ROIC_proxy"),
-                    info.get("revenueGrowth")
-                )
-                score = core.score_fundamental(info)
-                fund_rows.append({
-                    "Ticker":         t,
-                    "Nombre":         info.get("Nombre") or "—",
-                    "Sector":         info.get("Sector") or "—",
-                    "Score (0-100)":  score,
-                    "Recomendación":  rec,
-                    "Margen Neto":    info.get("profitMargins"),
-                    "ROIC":           info.get("ROIC_proxy"),
-                    "ROE":            info.get("ROE"),
-                    "D/E":            info.get("debtToEquity"),
-                    "Rev. Growth":    info.get("revenueGrowth"),
-                    "P/E Forward":    info.get("forwardPE"),
-                    "P/Book":         info.get("priceToBook"),
-                    "Free CF":        info.get("freeCashflow"),
-                    "Tipo":           info.get("Tipo"),
-                })
-                prog.progress((i+1)/len(tickers_ok))
-            prog.empty()
-
-        fund_df = pd.DataFrame(fund_rows)
-        if fund_df.empty:
-            st.info("No hay datos fundamentales disponibles.")
-        else:
-         st.dataframe(
-            fund_df.style.format({
-                "Margen Neto": _fmt_pct,
-                "ROIC":        _fmt_pct,
-                "ROE":         _fmt_pct,
-                "Rev. Growth": _fmt_pct,
-                "D/E":         lambda v: _fmt_num(v,1) if v else "—",
-                "P/E Forward": lambda v: _fmt_num(v,1) if v else "—",
-                "P/Book":      lambda v: _fmt_num(v,2) if v else "—",
-                "Free CF":     lambda v: f"${v/1e9:.1f}B" if v else "—",
-                "Score (0-100)": "{:.0f}",
-            }).map(lambda v: "background-color: #1b2d1b; color: #00c896" if isinstance(v, (int,float)) and v >= 65 else ("background-color: #2d2a1b; color: #f7a34f" if isinstance(v, (int,float)) and v >= 45 else "background-color: #2d1b1b; color: #f74f4f") if isinstance(v, (int,float)) else "", subset=["Score (0-100)"]),
-            use_container_width=True, hide_index=True
-        )
-
-
-    with tab6:
+    with tab5:
         st.markdown("### Score Buffett — Análisis por ticker")
         st.info("Seleccioná un ticker para ver el análisis detallado según los criterios de Warren Buffett.")
         if tickers_ok:
@@ -479,7 +426,7 @@ def render():
 
     # ── Exportar Excel ────────────────────────────────────────────────────────
     st.markdown("---")
-    excel_bytes = _exportar_excel(df_close, mk, fund_df if 'fund_df' in dir() else pd.DataFrame(), reporte_elim)
+    excel_bytes = _exportar_excel(df_close, mk, pd.DataFrame(), reporte_elim)
     st.download_button(
         "⬇️ Descargar Excel completo",
         data=excel_bytes,
