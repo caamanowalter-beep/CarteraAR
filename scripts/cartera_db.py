@@ -17,25 +17,6 @@ from datetime import datetime, date
 # DETECCIÓN DE ENTORNO Y CONEXIÓN
 # ═══════════════════════════════════════════════════════════════════════════════
 
-FMP_API_KEY = "HpBDT61rNxdt77DDiXkMOurnKjm6kVUp"
-
-def _obtener_precios_fmp(tickers: list) -> dict:
-    """Obtiene precios actuales desde FMP para múltiples tickers."""
-    if not tickers:
-        return {}
-    try:
-        import requests as _req
-        tickers_str = ",".join(tickers)
-        url = f"https://financialmodelingprep.com/api/v3/quote/{tickers_str}?apikey={FMP_API_KEY}"
-        r = _req.get(url, timeout=10)
-        if r.status_code == 200:
-            data = r.json()
-            if isinstance(data, list):
-                return {item["symbol"]: float(item["price"]) for item in data if item.get("price")}
-    except Exception:
-        pass
-    return {}
-
 def _get_database_url() -> str | None:
     url = os.environ.get("DATABASE_URL")
     if url:
