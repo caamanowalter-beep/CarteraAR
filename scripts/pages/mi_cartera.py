@@ -124,25 +124,24 @@ def _tab_gestionar_carteras():
     df_carteras = cartera_db.listar_carteras()
 
     if not df_carteras.empty:
-        # Grilla horizontal: hasta 4 carteras por fila
-        rows_list = list(df_carteras.iterrows())
-        n_cols = min(4, len(rows_list))
-        cols = st.columns(n_cols)
-        for idx, (_, row) in enumerate(rows_list):
-            with cols[idx % n_cols]:
-                st.markdown(
-                    f'<div style="background:#1e2130;padding:8px 10px;'
-                    f'border-radius:8px;border-left:3px solid #4f8ef7;margin-bottom:6px">'
-                    f'<div style="color:white;font-weight:700;font-size:13px">{row["nombre"]}</div>'
-                    f'<div style="color:#aaa;font-size:10px">{row.get("descripcion","") or ""}</div>'
-                    f'<div style="color:#4f8ef7;font-size:10px">{row.get("moneda_base","USD")} | {row.get("creada","")}</div>'
-                    f'</div>',
-                    unsafe_allow_html=True
-                )
-                if st.button("Eliminar", key=f"del_cart_{row['id']}",
-                             use_container_width=True):
-                    cartera_db.eliminar_cartera(row["id"])
-                    st.rerun()
+        for _, row in df_carteras.iterrows():
+            c1, c2, c3 = st.columns([4, 2, 1])
+            c1.markdown(
+                f'<div style="background:{BG_CARD};padding:10px 14px;'
+                f'border-radius:8px;border-left:3px solid {COLOR_AZUL}">'
+                f'<span style="color:white;font-weight:700">{row["nombre"]}</span>'
+                f'&nbsp;&nbsp;<span style="color:#aaa;font-size:12px">'
+                f'{row["descripcion"] or ""}</span><br>'
+                f'<span style="color:{COLOR_AZUL};font-size:12px">'
+                f'Moneda base: {row["moneda_base"]} | Creada: {row["creada"]}</span>'
+                f'</div>',
+                unsafe_allow_html=True
+            )
+            c2.write("")
+            if c3.button("🗑️", key=f"del_cart_{row['id']}",
+                         help="Eliminar cartera"):
+                cartera_db.eliminar_cartera(row["id"])
+                st.rerun()
     else:
         st.info("No tenés carteras creadas todavía.")
 
@@ -427,7 +426,7 @@ def _tab_movimientos(cartera_id: int, nombre: str):
     if key_tipo_mov not in st.session_state:
         st.session_state[key_tipo_mov] = "COMPRA"
 
-    _, col_tipo1, col_tipo2, _ = st.columns([2, 1, 1, 2])
+    col_tipo1, col_tipo2 = st.columns(2)
     if col_tipo1.button("COMPRA", key=f"btn_compra_{cartera_id}",
                         use_container_width=True,
                         type="primary" if st.session_state[key_tipo_mov] == "COMPRA" else "secondary"):
@@ -443,8 +442,8 @@ def _tab_movimientos(cartera_id: int, nombre: str):
     color_tipo = "#00c896" if tipo == "COMPRA" else "#f74f4f"
     st.markdown(
         f'<div style="background:{color_tipo}22;border-left:3px solid {color_tipo};'
-        f'padding:3px 8px;border-radius:4px;margin-bottom:4px;font-size:11px;color:{color_tipo}">'
-        f'Modo: {tipo}</div>',
+        f'padding:6px 12px;border-radius:6px;margin-bottom:8px;font-weight:600;color:{color_tipo}">'
+        f'Modo activo: {tipo}</div>',
         unsafe_allow_html=True
     )
 
