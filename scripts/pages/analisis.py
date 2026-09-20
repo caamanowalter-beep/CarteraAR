@@ -385,7 +385,15 @@ def render():
         st.markdown("### Score Buffett — Análisis por ticker")
         st.info("Seleccioná un ticker para ver el análisis detallado según los criterios de Warren Buffett.")
         if tickers_ok:
-            ticker_buff = st.selectbox("Ticker a analizar", tickers_ok, key="buffett_ticker_sel")
+            # Usar session_state para evitar rerun al cambiar ticker
+            if "buffett_ticker_sel" not in st.session_state:
+                st.session_state["buffett_ticker_sel"] = tickers_ok[0]
+            ticker_buff = st.selectbox(
+                "Ticker a analizar", tickers_ok,
+                index=tickers_ok.index(st.session_state["buffett_ticker_sel"])
+                      if st.session_state["buffett_ticker_sel"] in tickers_ok else 0,
+                key="buffett_ticker_sel"
+            )
             with st.spinner(f"Analizando {ticker_buff}..."):
                 info_buff = core.obtener_fundamentales(ticker_buff)
                 resultado = core.score_buffett(info_buff)
