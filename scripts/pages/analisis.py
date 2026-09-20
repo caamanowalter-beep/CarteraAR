@@ -273,6 +273,33 @@ def render():
                       f"Vol: {row.Volatilidad:.1%} | Sharpe: {row.Sharpe:.2f}")
 
     
+    # ── Métricas avanzadas Markowitz ──────────────────────────────────────────
+    with st.spinner("Calculando métricas avanzadas..."):
+        try:
+            metricas_avz = core.calcular_metricas_avanzadas(df_close, mk)
+        except Exception:
+            metricas_avz = {}
+
+    if metricas_avz:
+        st.markdown("#### Métricas de Riesgo Avanzadas")
+        cols_avz = st.columns(3)
+        for i_avz, (nombre_avz, metricas_c) in enumerate(metricas_avz.items()):
+            with cols_avz[i_avz]:
+                st.markdown(f"**{nombre_avz}**")
+                var_d   = metricas_c.get("VaR 95% diario (%)")
+                var_m   = metricas_c.get("VaR 95% mensual (%)")
+                sortino = metricas_c.get("Sortino Ratio")
+                mdd     = metricas_c.get("Max Drawdown (%)")
+                if var_d   is not None: st.metric("VaR 95% diario",   f"{var_d:.2f}%")
+                if var_m   is not None: st.metric("VaR 95% mensual",  f"{var_m:.2f}%")
+                if sortino is not None: st.metric("Sortino Ratio",    f"{sortino:.2f}")
+                if mdd     is not None: st.metric("Max Drawdown",     f"{mdd:.1f}%")
+
+    # ── Tabs de contenido ─────────────────────────────────────────────────────
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+        "Frontera Eficiente", "Pesos", "Correlaciones",
+        "Estadísticas", "Fundamentales", "Score Buffett"
+    ])
 
     with tab1:
         st.plotly_chart(_grafico_frontera(mk), use_container_width=True)
@@ -352,6 +379,88 @@ def render():
             }).map(lambda v: "background-color: #1b2d1b; color: #00c896" if isinstance(v, (int,float)) and v >= 65 else ("background-color: #2d2a1b; color: #f7a34f" if isinstance(v, (int,float)) and v >= 45 else "background-color: #2d1b1b; color: #f74f4f") if isinstance(v, (int,float)) else "", subset=["Score (0-100)"]),
             use_container_width=True, hide_index=True
         )
+
+
+    with tab6:
+        st.markdown("### Score Buffett — Análisis por ticker")
+        st.info("Seleccioná un ticker para ver el análisis detallado según los criterios de Warren Buffett.")
+        if tickers_ok:
+            ticker_buff = st.selectbox("Ticker a analizar", tickers_ok, key="buffett_ticker_sel")
+            with st.spinner(f"Analizando {ticker_buff}..."):
+                info_buff = core.obtener_fundamentales(ticker_buff)
+                resultado = core.score_buffett(info_buff)
+            score_b = resultado["score"]
+            color_b = resultado["color"]
+            clasif  = resultado["clasificacion"]
+            st.markdown(
+                f'<div style="background:#1e2130;padding:20px;border-radius:12px;'
+                f'border-left:5px solid {color_b};margin-bottom:16px">'
+                f'<div style="color:#aaa;font-size:13px">Score Buffett</div>'
+                f'<div style="color:{color_b};font-size:48px;font-weight:700">{score_b}/100</div>'
+                f'<div style="color:white;font-size:16px">{clasif}</div>'
+                f'</div>', unsafe_allow_html=True
+            )
+            cats = [
+                ("Rentabilidad", resultado["rentabilidad"], 30, "#4f8ef7"),
+                ("Crecimiento",  resultado["crecimiento"],  20, "#00c896"),
+                ("Solidez",      resultado["solidez"],      25, "#f7a34f"),
+                ("Valuacion",    resultado["valuacion"],    15, "#9b59b6"),
+                ("Moat",         resultado["moat"],         10, "#1abc9c"),
+            ]
+            st.markdown("#### Desglose por categoria")
+            cols_cat = st.columns(5)
+            for i_c, (cat, pts, max_pts, col_color) in enumerate(cats):
+                pct = pts / max_pts * 100 if max_pts > 0 else 0
+                with cols_cat[i_c]:
+                    st.markdown(
+                        f'<div style="background:#1e2130;padding:10px;border-radius:8px;text-align:center">'
+                        f'<div style="color:#aaa;font-size:11px">{cat}</div>'
+                        f'<div style="color:{col_color};font-size:22px;font-weight:700">{pts}/{max_pts}</div>'
+                        f'<div style="color:#aaa;font-size:11px">{pct:.0f}%</div>'
+                        f'</div>', unsafe_allow_html=True
+                    )
+            st.markdown("#### Detalle de indicadores")
+            df_det = pd.DataFrame(resultado["detalles"],
+                                   columns=["Indicador","Valor","Estado","Puntos","Descripcion"])
+            st.dataframe(
+                df_det.style.map(
+                    lambda v: "color:#00c896" if v=="OK" else "color:#f7a34f" if v=="MED" else "color:#f74f4f" if v=="BAD" else "",
+                    subset=["Estado"]
+                ).format({"Puntos": "{:.0f}"}),
+                use_container_width=True, hide_index=True
+            )
+            if len(tickers_ok) > 1:
+                st.markdown("---")
+                st.markdown("#### Ranking Buffett — Todos los tickers")
+                with st.spinner("Calculando scores..."):
+                    ranking = []
+                    prog2 = st.progress(0)
+                    for i_r, t_r in enumerate(tickers_ok):
+                        inf_r = core.obtener_fundamentales(t_r)
+                        res_r = core.score_buffett(inf_r)
+                        ranking.append({
+                            "Ticker": t_r, "Score": res_r["score"],
+                            "Clasificacion": res_r["clasificacion"],
+                            "Rentabilidad": res_r["rentabilidad"],
+                            "Crecimiento": res_r["crecimiento"],
+                            "Solidez": res_r["solidez"],
+                            "Valuacion": res_r["valuacion"],
+                            "Moat": res_r["moat"],
+                        })
+                        prog2.progress((i_r+1)/len(tickers_ok))
+                    prog2.empty()
+                df_rank = pd.DataFrame(ranking).sort_values("Score", ascending=False)
+                st.dataframe(
+                    df_rank.style.map(
+                        lambda v: "background-color:#1b2d1b;color:#00c896" if isinstance(v,(int,float)) and v>=75 else
+                                  "background-color:#2d2a1b;color:#f7a34f" if isinstance(v,(int,float)) and v>=55 else
+                                  "background-color:#2d1b1b;color:#f74f4f" if isinstance(v,(int,float)) and v<35 else "",
+                        subset=["Score"]
+                    ),
+                    use_container_width=True, hide_index=True
+                )
+        else:
+            st.info("No hay tickers disponibles para analizar.")
 
     # ── Exportar Excel ────────────────────────────────────────────────────────
     st.markdown("---")
