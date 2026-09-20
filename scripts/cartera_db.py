@@ -515,59 +515,59 @@ def calcular_pnl(cartera_id: int, ccl: float = 1200.0) -> pd.DataFrame:
     precios_ars = {}  # ticker -> precio en ARS (CEDEARs y locales via .BA)
     precios_usd = {}  # ticker -> precio en USD (internacionales)
 
+    # Separar tickers por tipo para obtener precios eficientemente
+    tickers_cedear = []  # CEDEARs y locales ARS
+    tickers_usd    = []  # Internacionales USD
+
     for _, pos in df_pos.iterrows():
-        t         = str(pos["ticker"]).upper()
-        es_cedear = int(pos.get("es_cedear", 0)) == 1
-        moneda    = str(pos.get("moneda", "USD")).upper()
+        t      = str(pos["ticker"]).upper()
+        es_ced = int(pos.get("es_cedear", 0)) == 1
+        mon    = str(pos.get("moneda", "USD")).upper()
+        if es_ced or mon == "ARS":
+            tickers_cedear.append(t)
+        else:
+            tickers_usd.append(t)
+
+    # Precios USD via FMP (batch) para internacionales
+    if tickers_usd:
         try:
-            if es_cedear or moneda == "ARS":
-                # Para CEDEARs: obtener precio USD via FMP y convertir a ARS via CCL
-                # Esto es más preciso que el precio .BA de Yahoo (que puede venir en USD)
-                pass  # se obtiene en batch FMP abajo
-            else:
-                # Buscar precio USD en Yahoo Finance (fallback, FMP se hace en batch)
-                pass
+            fmp_usd = _obtener_precios_fmp(tickers_usd)
+            precios_usd.update(fmp_usd)
         except Exception:
             pass
+        # Fallback Yahoo para los que FMP no devolvió
+        for t_u in tickers_usd:
+            if t_u not in precios_usd:
+                try:
+                    info = yf.Ticker(t_u).info
+                    p = info.get("currentPrice") or info.get("regularMarketPrice")
+                    if p:
+                        precios_usd[t_u] = float(p)
+                except Exception:
+                    pass
 
-    # Obtener TODOS los precios en batch desde FMP
-    all_tickers = [str(pos["ticker"]).upper() for _, pos in df_pos.iterrows()]
-    fmp_all = _obtener_precios_fmp(all_tickers)
-
-    for _, pos in df_pos.iterrows():
-        t_b = str(pos["ticker"]).upper()
-        es_ced = int(pos.get("es_cedear", 0)) == 1
-        mon = str(pos.get("moneda","USD")).upper()
-
-        if es_ced or mon == "ARS":
-            # CEDEAR/Local: precio USD de FMP × CCL = precio ARS estimado
-            if t_b in fmp_all and fmp_all[t_b] > 0:
-                precios_ars[t_b] = fmp_all[t_b] * ccl
+    # Precios ARS para CEDEARs: FMP precio USD × CCL, con fallback .BA
+    if tickers_cedear:
+        try:
+            fmp_ced = _obtener_precios_fmp(tickers_cedear)
+        except Exception:
+            fmp_ced = {}
+        for t_c in tickers_cedear:
+            if t_c in fmp_ced and fmp_ced[t_c] > 0:
+                # Precio USD de FMP × CCL = precio ARS equivalente
+                precios_ars[t_c] = fmp_ced[t_c] * ccl
             else:
                 # Fallback: Yahoo Finance .BA
                 try:
-                    ticker_ba = t_b + ".BA" if not t_b.endswith(".BA") else t_b
+                    ticker_ba = t_c + ".BA" if not t_c.endswith(".BA") else t_c
                     info_ba = yf.Ticker(ticker_ba).info
                     p_ars = info_ba.get("currentPrice") or info_ba.get("regularMarketPrice")
-                    if p_ars and float(p_ars) >= 10:
+                    if p_ars:
                         p_f = float(p_ars)
-                        # Si el precio parece estar en USD (< 1000), convertir a ARS
-                        if p_f < 1000:
-                            precios_ars[t_b] = p_f * ccl
-                        else:
-                            precios_ars[t_b] = p_f
-                except Exception:
-                    pass
-        else:
-            # Internacional USD: usar FMP directo
-            if t_b in fmp_all:
-                precios_usd[t_b] = fmp_all[t_b]
-            else:
-                try:
-                    info = yf.Ticker(t_b).info
-                    p = info.get("currentPrice") or info.get("regularMarketPrice")
-                    if p:
-                        precios_usd[t_b] = float(p)
+                        if p_f > 500_000:
+                            p_f = p_f / 1000
+                        if p_f >= 10:
+                            precios_ars[t_c] = p_f
                 except Exception:
                     pass
 
