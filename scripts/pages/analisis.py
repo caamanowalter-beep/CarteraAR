@@ -272,14 +272,7 @@ def render():
                       f"Ret: {row.Retorno:.1%}",
                       f"Vol: {row.Volatilidad:.1%} | Sharpe: {row.Sharpe:.2f}")
 
-    # ── Tabs de contenido ─────────────────────────────────────────────────────
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "📈 Frontera Eficiente",
-        "⚖️ Pesos",
-        "🔗 Correlaciones",
-        "📋 Estadísticas",
-        "🏦 Fundamentales"
-    ])
+    
 
     with tab1:
         st.plotly_chart(_grafico_frontera(mk), use_container_width=True)
@@ -314,8 +307,7 @@ def render():
             st.dataframe(reporte_elim[["Ticker","Motivo","profitMargins","ROIC_proxy","debtToEquity"]],
                          use_container_width=True, hide_index=True)
 
-    with tab5:
-        with st.spinner("📊 Obteniendo fundamentales..."):
+    
             fund_rows = []
             prog = st.progress(0)
             for i, t in enumerate(tickers_ok):

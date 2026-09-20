@@ -100,27 +100,194 @@ def evaluar_recomendacion(margen, roic, crecimiento) -> str:
             return "🔴 Débil"
     return "⚪ Sin datos"
 
-def score_fundamental(info: dict) -> float:
-    """Score 0-100 basado en fundamentales."""
+def score_buffett(info: dict) -> dict:
+    """
+    Score Buffett completo 0-100 con desglose por categoría.
+    Basado en los principios de Warren Buffett y Charlie Munger.
+    Retorna dict con score total, por categoría y detalle de cada check.
+    """
+    detalles = []
     score = 0
-    checks = [
-        (info.get("profitMargins"),   lambda x: x > 0.20, 20),
-        (info.get("profitMargins"),   lambda x: x > 0.10, 10),
-        (info.get("ROIC_proxy"),      lambda x: x > 0.15, 20),
-        (info.get("ROIC_proxy"),      lambda x: x > 0.10, 10),
-        (info.get("revenueGrowth"),   lambda x: x > 0.10, 15),
-        (info.get("debtToEquity"),    lambda x: x < 100,  10),
-        (info.get("freeCashflow"),    lambda x: x > 0,    10),
-        (info.get("currentRatio"),    lambda x: x > 1.5,  5),
-    ]
-    for val, cond, pts in checks:
-        if val is not None:
-            try:
-                if cond(val):
-                    score += pts
-            except Exception:
-                pass
-    return min(score, 100)
+
+    # ── 1. RENTABILIDAD (30 pts) ──────────────────────────────────────────────
+    # Margen Neto > 20% (ventaja competitiva fuerte)
+    margen = info.get("profitMargins")
+    if margen is not None:
+        if margen > 0.20:
+            score += 12; detalles.append(("Margen Neto", f"{margen:.1%}", "✅", 12, "Excelente (>20%)"))
+        elif margen > 0.10:
+            score += 6;  detalles.append(("Margen Neto", f"{margen:.1%}", "🟡", 6, "Aceptable (>10%)"))
+        else:
+            detalles.append(("Margen Neto", f"{margen:.1%}", "❌", 0, "Bajo (<10%)"))
+    else:
+        detalles.append(("Margen Neto", "—", "⚪", 0, "Sin datos"))
+
+    # ROE > 15% (retorno sobre patrimonio)
+    roe = info.get("ROE")
+    if roe is not None:
+        if roe > 0.20:
+            score += 10; detalles.append(("ROE", f"{roe:.1%}", "✅", 10, "Excelente (>20%)"))
+        elif roe > 0.15:
+            score += 6;  detalles.append(("ROE", f"{roe:.1%}", "🟡", 6, "Bueno (>15%)"))
+        else:
+            detalles.append(("ROE", f"{roe:.1%}", "❌", 0, "Bajo (<15%)"))
+    else:
+        detalles.append(("ROE", "—", "⚪", 0, "Sin datos"))
+
+    # ROIC > 15% (retorno sobre capital invertido)
+    roic = info.get("ROIC_proxy")
+    if roic is not None:
+        if roic > 0.15:
+            score += 8;  detalles.append(("ROIC", f"{roic:.1%}", "✅", 8, "Excelente (>15%)"))
+        elif roic > 0.10:
+            score += 4;  detalles.append(("ROIC", f"{roic:.1%}", "🟡", 4, "Aceptable (>10%)"))
+        else:
+            detalles.append(("ROIC", f"{roic:.1%}", "❌", 0, "Bajo (<10%)"))
+    else:
+        detalles.append(("ROIC", "—", "⚪", 0, "Sin datos"))
+
+    # ── 2. CRECIMIENTO (20 pts) ───────────────────────────────────────────────
+    # Crecimiento de ingresos > 10%
+    rev_growth = info.get("revenueGrowth")
+    if rev_growth is not None:
+        if rev_growth > 0.15:
+            score += 10; detalles.append(("Crec. Ingresos", f"{rev_growth:.1%}", "✅", 10, "Fuerte (>15%)"))
+        elif rev_growth > 0.08:
+            score += 6;  detalles.append(("Crec. Ingresos", f"{rev_growth:.1%}", "🟡", 6, "Moderado (>8%)"))
+        else:
+            detalles.append(("Crec. Ingresos", f"{rev_growth:.1%}", "❌", 0, "Lento (<8%)"))
+    else:
+        detalles.append(("Crec. Ingresos", "—", "⚪", 0, "Sin datos"))
+
+    # Crecimiento de ganancias > 10%
+    earn_growth = info.get("earningsGrowth")
+    if earn_growth is not None:
+        if earn_growth > 0.15:
+            score += 10; detalles.append(("Crec. Ganancias", f"{earn_growth:.1%}", "✅", 10, "Fuerte (>15%)"))
+        elif earn_growth > 0.08:
+            score += 5;  detalles.append(("Crec. Ganancias", f"{earn_growth:.1%}", "🟡", 5, "Moderado (>8%)"))
+        else:
+            detalles.append(("Crec. Ganancias", f"{earn_growth:.1%}", "❌", 0, "Lento (<8%)"))
+    else:
+        detalles.append(("Crec. Ganancias", "—", "⚪", 0, "Sin datos"))
+
+    # ── 3. SOLIDEZ FINANCIERA (25 pts) ────────────────────────────────────────
+    # Deuda/Equity < 0.5 (baja deuda)
+    de = info.get("debtToEquity")
+    if de is not None:
+        de_norm = de / 100 if de > 5 else de  # normalizar si viene en %
+        if de_norm < 0.30:
+            score += 10; detalles.append(("Deuda/Equity", f"{de_norm:.2f}x", "✅", 10, "Muy baja (<0.30x)"))
+        elif de_norm < 0.80:
+            score += 5;  detalles.append(("Deuda/Equity", f"{de_norm:.2f}x", "🟡", 5, "Moderada (<0.80x)"))
+        else:
+            detalles.append(("Deuda/Equity", f"{de_norm:.2f}x", "❌", 0, "Alta (>0.80x)"))
+    else:
+        detalles.append(("Deuda/Equity", "—", "⚪", 0, "Sin datos"))
+
+    # Current Ratio > 1.5 (liquidez)
+    cr = info.get("currentRatio")
+    if cr is not None:
+        if cr > 2.0:
+            score += 8;  detalles.append(("Current Ratio", f"{cr:.2f}x", "✅", 8, "Excelente (>2.0x)"))
+        elif cr > 1.5:
+            score += 5;  detalles.append(("Current Ratio", f"{cr:.2f}x", "🟡", 5, "Bueno (>1.5x)"))
+        else:
+            detalles.append(("Current Ratio", f"{cr:.2f}x", "❌", 0, "Bajo (<1.5x)"))
+    else:
+        detalles.append(("Current Ratio", "—", "⚪", 0, "Sin datos"))
+
+    # Free Cash Flow positivo
+    fcf = info.get("freeCashflow")
+    if fcf is not None:
+        if fcf > 0:
+            score += 7;  detalles.append(("Free Cash Flow", f"${fcf/1e9:.1f}B", "✅", 7, "Positivo"))
+        else:
+            detalles.append(("Free Cash Flow", f"${fcf/1e9:.1f}B", "❌", 0, "Negativo"))
+    else:
+        detalles.append(("Free Cash Flow", "—", "⚪", 0, "Sin datos"))
+
+    # ── 4. VALUACIÓN (15 pts) ─────────────────────────────────────────────────
+    # P/E Forward razonable
+    pe = info.get("forwardPE")
+    if pe is not None and pe > 0:
+        if pe < 15:
+            score += 8;  detalles.append(("P/E Forward", f"{pe:.1f}x", "✅", 8, "Barato (<15x)"))
+        elif pe < 25:
+            score += 4;  detalles.append(("P/E Forward", f"{pe:.1f}x", "🟡", 4, "Razonable (<25x)"))
+        else:
+            detalles.append(("P/E Forward", f"{pe:.1f}x", "❌", 0, "Caro (>25x)"))
+    else:
+        detalles.append(("P/E Forward", "—", "⚪", 0, "Sin datos"))
+
+    # Price to Book < 3
+    pb = info.get("priceToBook")
+    if pb is not None and pb > 0:
+        if pb < 1.5:
+            score += 7;  detalles.append(("Price/Book", f"{pb:.2f}x", "✅", 7, "Muy barato (<1.5x)"))
+        elif pb < 3.0:
+            score += 3;  detalles.append(("Price/Book", f"{pb:.2f}x", "🟡", 3, "Razonable (<3x)"))
+        else:
+            detalles.append(("Price/Book", f"{pb:.2f}x", "❌", 0, "Caro (>3x)"))
+    else:
+        detalles.append(("Price/Book", "—", "⚪", 0, "Sin datos"))
+
+    # ── 5. MOAT / VENTAJA COMPETITIVA (10 pts) ────────────────────────────────
+    # Margen Bruto > 40% (pricing power)
+    gm = info.get("grossMargins")
+    if gm is not None:
+        if gm > 0.50:
+            score += 6;  detalles.append(("Margen Bruto", f"{gm:.1%}", "✅", 6, "Moat fuerte (>50%)"))
+        elif gm > 0.35:
+            score += 3;  detalles.append(("Margen Bruto", f"{gm:.1%}", "🟡", 3, "Moat moderado (>35%)"))
+        else:
+            detalles.append(("Margen Bruto", f"{gm:.1%}", "❌", 0, "Sin moat claro (<35%)"))
+    else:
+        detalles.append(("Margen Bruto", "—", "⚪", 0, "Sin datos"))
+
+    # Margen Operativo > 15%
+    om = info.get("operatingMargins")
+    if om is not None:
+        if om > 0.20:
+            score += 4;  detalles.append(("Margen Operativo", f"{om:.1%}", "✅", 4, "Excelente (>20%)"))
+        elif om > 0.12:
+            score += 2;  detalles.append(("Margen Operativo", f"{om:.1%}", "🟡", 2, "Bueno (>12%)"))
+        else:
+            detalles.append(("Margen Operativo", f"{om:.1%}", "❌", 0, "Bajo (<12%)"))
+    else:
+        detalles.append(("Margen Operativo", "—", "⚪", 0, "Sin datos"))
+
+    score = min(score, 100)
+
+    # Clasificación final
+    if score >= 75:
+        clasificacion = "🟢 Excelente — Buffett lo compraría"
+        color = "#00c896"
+    elif score >= 55:
+        clasificacion = "🟡 Bueno — Vale la pena analizar"
+        color = "#f7a34f"
+    elif score >= 35:
+        clasificacion = "🟠 Regular — Requiere más análisis"
+        color = "#f7a34f"
+    else:
+        clasificacion = "🔴 Débil — No cumple criterios Buffett"
+        color = "#f74f4f"
+
+    return {
+        "score":         score,
+        "clasificacion": clasificacion,
+        "color":         color,
+        "detalles":      detalles,
+        "rentabilidad":  sum(d[3] for d in detalles[:3]),
+        "crecimiento":   sum(d[3] for d in detalles[3:5]),
+        "solidez":       sum(d[3] for d in detalles[5:8]),
+        "valuacion":     sum(d[3] for d in detalles[8:10]),
+        "moat":          sum(d[3] for d in detalles[10:]),
+    }
+
+def score_fundamental(info: dict) -> float:
+    """Score 0-100 simplificado (compatibilidad hacia atrás)."""
+    return score_buffett(info)["score"]
 
 # =========================================
 # MARKOWITZ
@@ -218,6 +385,126 @@ def frontera_eficiente(mk: dict, n_puntos: int = 200) -> pd.DataFrame:
             puntos.append({"Retorno": round(target,4), "Volatilidad": round(vol,4), "Sharpe": round(sr,4)})
 
     return pd.DataFrame(puntos)
+
+# =========================================
+# MARKOWITZ — MÉTRICAS AVANZADAS
+# =========================================
+
+def calcular_beta_cartera(df_close: pd.DataFrame, pesos: np.ndarray,
+                           benchmark: str = "SPY") -> float | None:
+    """
+    Calcula el Beta de la cartera vs un benchmark (SPY por defecto).
+    Beta > 1: más volátil que el mercado. Beta < 1: más defensiva.
+    """
+    try:
+        tickers_con_bench = list(df_close.columns) + [benchmark]
+        df_bench = yf.download([benchmark], period="2y", interval="1mo",
+                                progress=False, auto_adjust=True)["Close"]
+        if df_bench.empty:
+            return None
+        df_combined = df_close.join(df_bench.rename(benchmark), how="inner")
+        returns = np.log(df_combined / df_combined.shift(1)).dropna()
+        bench_ret = returns[benchmark]
+        port_ret_series = returns[list(df_close.columns)].dot(pesos)
+        cov_pb = np.cov(port_ret_series, bench_ret)[0][1]
+        var_b  = np.var(bench_ret)
+        return round(cov_pb / var_b, 3) if var_b > 0 else None
+    except Exception:
+        return None
+
+
+def calcular_var(df_close: pd.DataFrame, pesos: np.ndarray,
+                 confianza: float = 0.95, horizonte: int = 21) -> dict:
+    """
+    Calcula el Value at Risk (VaR) histórico y paramétrico.
+    confianza: 0.95 = 95%, 0.99 = 99%
+    horizonte: días (21 = 1 mes, 252 = 1 año)
+    Retorna dict con VaR histórico y paramétrico en %.
+    """
+    try:
+        returns = np.log(df_close / df_close.shift(1)).dropna()
+        port_returns = returns.dot(pesos)
+        # VaR histórico
+        var_hist = float(np.percentile(port_returns, (1 - confianza) * 100))
+        var_hist_h = var_hist * np.sqrt(horizonte)
+        # VaR paramétrico (distribución normal)
+        from scipy import stats
+        z = stats.norm.ppf(1 - confianza)
+        mu  = port_returns.mean()
+        sig = port_returns.std()
+        var_param   = float(mu + z * sig)
+        var_param_h = var_param * np.sqrt(horizonte)
+        return {
+            "var_hist_diario":   round(var_hist * 100, 3),
+            "var_hist_mensual":  round(var_hist_h * 100, 3),
+            "var_param_diario":  round(var_param * 100, 3),
+            "var_param_mensual": round(var_param_h * 100, 3),
+            "confianza":         confianza,
+        }
+    except Exception:
+        return {}
+
+
+def calcular_sortino(df_close: pd.DataFrame, pesos: np.ndarray,
+                     rf_anual: float = 0.0) -> float | None:
+    """
+    Calcula el Sortino Ratio (penaliza solo la volatilidad negativa).
+    Sortino > 1: buena relación retorno/riesgo bajista.
+    Sortino > 2: excelente.
+    """
+    try:
+        returns = np.log(df_close / df_close.shift(1)).dropna()
+        port_returns = returns.dot(pesos)
+        rf_mensual = rf_anual / 12
+        exceso = port_returns - rf_mensual
+        downside = exceso[exceso < 0]
+        downside_std = np.sqrt((downside ** 2).mean()) * np.sqrt(12)
+        ret_anual = port_returns.mean() * 12
+        if downside_std == 0:
+            return None
+        return round((ret_anual - rf_anual) / downside_std, 3)
+    except Exception:
+        return None
+
+
+def calcular_max_drawdown(df_close: pd.DataFrame, pesos: np.ndarray) -> float | None:
+    """
+    Calcula el Maximum Drawdown de la cartera.
+    Representa la mayor caída desde un pico hasta un valle.
+    """
+    try:
+        port_value = (df_close * pesos).sum(axis=1)
+        port_value = port_value / port_value.iloc[0]
+        rolling_max = port_value.cummax()
+        drawdown = (port_value - rolling_max) / rolling_max
+        return round(float(drawdown.min()) * 100, 2)
+    except Exception:
+        return None
+
+
+def calcular_metricas_avanzadas(df_close: pd.DataFrame, mk: dict) -> dict:
+    """
+    Calcula todas las métricas avanzadas de Markowitz para los 3 portafolios.
+    Retorna dict con métricas para cada tipo de cartera.
+    """
+    resultados = {}
+    carteras = {
+        "Equilibrada":   mk["w_eq"],
+        "Min. Varianza": mk["w_min"],
+        "Max. Sharpe":   mk["w_max"],
+    }
+    for nombre, pesos in carteras.items():
+        var_data = calcular_var(df_close, pesos)
+        sortino  = calcular_sortino(df_close, pesos)
+        mdd      = calcular_max_drawdown(df_close, pesos)
+        resultados[nombre] = {
+            "VaR 95% diario (%)":   var_data.get("var_hist_diario"),
+            "VaR 95% mensual (%)":  var_data.get("var_hist_mensual"),
+            "Sortino Ratio":        sortino,
+            "Max Drawdown (%)":     mdd,
+        }
+    return resultados
+
 
 # =========================================
 # DÓLAR CCL
