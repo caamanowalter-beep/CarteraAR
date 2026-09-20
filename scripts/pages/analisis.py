@@ -296,6 +296,10 @@ def render():
                 if mdd     is not None: st.metric("Max Drawdown",     f"{mdd:.1f}%")
 
     # ── Tabs de contenido ─────────────────────────────────────────────────────
+    # Inicializar variables para evitar UnboundLocalError
+    fund_rows = []
+    fund_df   = pd.DataFrame()
+
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "Frontera Eficiente", "Pesos", "Correlaciones",
         "Estadísticas", "Fundamentales", "Score Buffett"
