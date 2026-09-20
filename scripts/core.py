@@ -47,8 +47,71 @@ def descargar_precios(tickers: tuple, anios: int = ANIOS) -> pd.DataFrame:
 # =========================================
 # FUNDAMENTALES (con caché Streamlit)
 # =========================================
+FMP_API_KEY = "HpBDT61rNxdt77DDiXkMOurnKjm6kVUp"
+
+def _obtener_fundamentales_fmp(ticker: str) -> dict | None:
+    """Obtiene fundamentales desde Financial Modeling Prep (fuente principal)."""
+    try:
+        import requests as _req
+        # Perfil de la empresa
+        url_profile = f"https://financialmodelingprep.com/api/v3/profile/{ticker}?apikey={FMP_API_KEY}"
+        r_profile = _req.get(url_profile, timeout=8)
+        if r_profile.status_code != 200 or not r_profile.json():
+            return None
+        p = r_profile.json()[0]
+
+        # Ratios financieros
+        url_ratios = f"https://financialmodelingprep.com/api/v3/ratios-ttm/{ticker}?apikey={FMP_API_KEY}"
+        r_ratios = _req.get(url_ratios, timeout=8)
+        rat = r_ratios.json()[0] if r_ratios.status_code == 200 and r_ratios.json() else {}
+
+        # Key metrics
+        url_metrics = f"https://financialmodelingprep.com/api/v3/key-metrics-ttm/{ticker}?apikey={FMP_API_KEY}"
+        r_metrics = _req.get(url_metrics, timeout=8)
+        met = r_metrics.json()[0] if r_metrics.status_code == 200 and r_metrics.json() else {}
+
+        return {
+            "Ticker":             ticker,
+            "forwardPE":          p.get("pe"),
+            "trailingPE":         rat.get("peRatioTTM"),
+            "priceToBook":        rat.get("priceToBookRatioTTM"),
+            "enterpriseValue":    met.get("enterpriseValueTTM"),
+            "enterpriseToEbitda": rat.get("enterpriseValueOverEBITDATTM"),
+            "quickRatio":         rat.get("quickRatioTTM"),
+            "currentRatio":       rat.get("currentRatioTTM"),
+            "totalDebt":          met.get("netDebtTTM"),
+            "debtToEquity":       rat.get("debtEquityRatioTTM"),
+            "earningsGrowth":     rat.get("earningsYieldTTM"),
+            "revenueGrowth":      met.get("revenuePerShareTTM"),
+            "operatingCashflow":  met.get("operatingCashFlowPerShareTTM"),
+            "assetTurnover":      rat.get("assetTurnoverTTM"),
+            "grossMargins":       rat.get("grossProfitMarginTTM"),
+            "operatingMargins":   rat.get("operatingProfitMarginTTM"),
+            "profitMargins":      rat.get("netProfitMarginTTM"),
+            "ROA":                rat.get("returnOnAssetsTTM"),
+            "ROE":                rat.get("returnOnEquityTTM"),
+            "ROIC_proxy":         rat.get("returnOnCapitalEmployedTTM"),
+            "EPS":                p.get("eps"),
+            "freeCashflow":       met.get("freeCashFlowPerShareTTM"),
+            "currentPrice":       p.get("price"),
+            "Sector":             p.get("sector"),
+            "Industria":          p.get("industry"),
+            "MarketCap":          p.get("mktCap"),
+            "Nombre":             p.get("companyName"),
+            "Tipo":               cedear_mapper.clasificar_ticker(ticker),
+        }
+    except Exception:
+        return None
+
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def obtener_fundamentales(ticker: str) -> dict:
+    # Intentar FMP primero (más confiable desde Streamlit Cloud)
+    fmp_data = _obtener_fundamentales_fmp(ticker)
+    if fmp_data and fmp_data.get("currentPrice"):
+        return fmp_data
+
+    # Fallback: Yahoo Finance
     try:
         info = yf.Ticker(ticker).info
         return {

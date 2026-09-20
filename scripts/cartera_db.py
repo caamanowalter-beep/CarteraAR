@@ -483,6 +483,24 @@ def eliminar_movimiento(mov_id: int) -> None:
 # P&L EN TIEMPO REAL
 # ═══════════════════════════════════════════════════════════════════════════════
 
+FMP_API_KEY = "HpBDT61rNxdt77DDiXkMOurnKjm6kVUp"
+
+def _obtener_precios_fmp(tickers: list) -> dict:
+    """Obtiene precios actuales desde FMP para múltiples tickers en una sola llamada."""
+    if not tickers:
+        return {}
+    try:
+        import requests as _req
+        tickers_str = ",".join(tickers)
+        url = f"https://financialmodelingprep.com/api/v3/quote/{tickers_str}?apikey={FMP_API_KEY}"
+        r = _req.get(url, timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            return {item["symbol"]: float(item["price"]) for item in data if item.get("price")}
+    except Exception:
+        pass
+    return {}
+
 def calcular_pnl(cartera_id: int, ccl: float = 1200.0) -> pd.DataFrame:
     """
     Calcula P&L en tiempo real.
@@ -523,6 +541,27 @@ def calcular_pnl(cartera_id: int, ccl: float = 1200.0) -> pd.DataFrame:
                     precios_usd[t] = float(p_usd)
         except Exception:
             pass
+
+    # Obtener precios USD en batch desde FMP (más confiable que Yahoo)
+    tickers_usd_needed = [
+        str(pos["ticker"]).upper()
+        for _, pos in df_pos.iterrows()
+        if int(pos.get("es_cedear", 0)) == 0 and str(pos.get("moneda","USD")).upper() == "USD"
+        and str(pos["ticker"]).upper() not in precios_usd
+    ]
+    if tickers_usd_needed:
+        fmp_prices = _obtener_precios_fmp(tickers_usd_needed)
+        precios_usd.update(fmp_prices)
+        # Fallback Yahoo Finance para los que FMP no devolvió
+        for t_usd in tickers_usd_needed:
+            if t_usd not in precios_usd:
+                try:
+                    info = yf.Ticker(t_usd).info
+                    p = info.get("currentPrice") or info.get("regularMarketPrice")
+                    if p:
+                        precios_usd[t_usd] = float(p)
+                except Exception:
+                    pass
 
     rows = []
     for _, pos in df_pos.iterrows():

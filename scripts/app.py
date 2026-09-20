@@ -18,11 +18,11 @@ st.markdown("""
     [data-testid="stSidebar"] { background-color: #1a1f2e !important; }
     [data-testid="stSidebar"] * { color: #e2e8f0 !important; }
     [data-testid="stSidebar"] .stRadio label {
-        color: #e2e8f0 !important; font-size: 13px !important;
-        padding: 4px 0 !important; min-height: 28px !important;
+        color: #e2e8f0 !important; font-size: 11px !important;
+        padding: 2px 0 !important; min-height: 22px !important;
     }
     [data-testid="stSidebar"] hr { border-color: #2d3748 !important; }
-    div[data-testid="stMetricValue"] > div { font-size: 17px !important; }
+    div[data-testid="stMetricValue"] > div { font-size: 15px !important; }
     div[data-testid="stMetricLabel"] { font-size: 11px !important; }
     div[data-testid="stMetricDelta"] { font-size: 11px !important; }
     .stTabs [data-baseweb="tab"] {
