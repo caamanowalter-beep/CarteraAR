@@ -362,6 +362,32 @@ def render():
 
     sel = st.selectbox("Ver dashboard de:", list(opciones.keys()),
                        key="inicio_cartera_sel")
+
+    # ── Barra tipos de cambio (compacta, arriba) ──────────────────────────────
+    @st.cache_data(ttl=300, show_spinner=False)  # cache 5 minutos
+    def _obtener_tc_cached():
+        try:
+            from market_info import obtener_tipos_cambio
+            return obtener_tipos_cambio()
+        except Exception:
+            return {}
+
+    tc_data = _obtener_tc_cached()
+    if tc_data:
+        ccl_v   = tc_data.get("CCL", ccl)
+        mep_v   = tc_data.get("MEP")
+        blue_v  = tc_data.get("Blue")
+        ofic_v  = tc_data.get("Oficial")
+        partes  = [f"💵 CCL ${ccl_v:,.0f}"]
+        if mep_v:   partes.append(f"📊 MEP ${mep_v:,.0f}")
+        if blue_v:  partes.append(f"🔵 Blue ${blue_v:,.0f}")
+        if ofic_v:  partes.append(f"🏦 Oficial ${ofic_v:,.0f}")
+        tc_str = "  |  ".join(partes)
+        st.markdown(
+            f'<div style="background:#1e2130;padding:4px 12px;border-radius:6px;'
+            f'margin-bottom:8px;font-size:11px;color:#aaa">{tc_str}</div>',
+            unsafe_allow_html=True
+        )
     cartera_ids = ([r['id'] for _, r in df_carteras.iterrows()]
                    if opciones[sel] == -1 else [opciones[sel]])
 
@@ -493,9 +519,9 @@ def render():
                       "Capital invertido", COLOR_GRIS)
     with c3:
         gan_color = COLOR_VERDE if total_gan >= 0 else COLOR_ROJO
-        _card_metrica("Ganancia no realizada", f"${total_gan:+,.2f}",
-                      f"≈ ${total_gan * ccl:+,.0f} ARS", gan_color,
-                      delta=f"{total_gan_pct:+.2f}%")
+        gan_ars_str = f"${total_gan * ccl:+,.0f} ARS"
+        _card_metrica("Ganancia", f"{total_gan_pct:+.2f}%",
+                      f"${total_gan:+,.2f} USD ({gan_ars_str})", gan_color)
     with c4:
         _card_metrica("Dividendos cobrados", f"${total_dividendos_usd:,.2f}",
                       "Total histórico USD", COLOR_VERDE)
@@ -603,19 +629,8 @@ def render():
             else:
                 st.info("Sin datos de ganancia para graficar.")
 
-    # ── Tipos de cambio ───────────────────────────────────────────────────────
-    st.markdown("---")
-    st.markdown("### 💱 Tipos de cambio")
-    try:
-        from market_info import obtener_tipos_cambio
-        tc = obtener_tipos_cambio()
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("CCL",     f"${tc.get('CCL', ccl):,.2f}"    if tc.get('CCL')     else f"${ccl:,.2f}")
-        c2.metric("MEP",     f"${tc.get('MEP'):,.2f}"          if tc.get('MEP')     else "—")
-        c3.metric("Oficial", f"${tc.get('Oficial'):,.2f}"      if tc.get('Oficial') else "—")
-        c4.metric("Blue",    f"${tc.get('Blue'):,.2f}"          if tc.get('Blue')    else "—")
-    except Exception:
-        st.metric("CCL", f"${ccl:,.2f}")
+    # ── Tipos de cambio (al final, compacto) ────────────────────────────────
+    # (movido arriba del resumen — ver bloque _barra_tc más abajo)
 
 
 
