@@ -355,10 +355,10 @@ def render():
             color_b = resultado["color"]
             clasif  = resultado["clasificacion"]
             st.markdown(
-                f'<div style="background:#1e2130;padding:20px;border-radius:12px;'
+                f'<div style="background:#1e2130;padding:8px 12px;border-radius:8px;'
                 f'border-left:5px solid {color_b};margin-bottom:16px">'
-                f'<div style="color:#aaa;font-size:13px">Score Buffett</div>'
-                f'<div style="color:{color_b};font-size:48px;font-weight:700">{score_b}/100</div>'
+                f'<div style="color:#aaa;font-size:10px">Score Buffett</div>'
+                f'<div style="color:{color_b};font-size:28px;font-weight:700">{score_b}/100</div>'
                 f'<div style="color:white;font-size:16px">{clasif}</div>'
                 f'</div>', unsafe_allow_html=True
             )
@@ -375,8 +375,8 @@ def render():
                 pct = pts / max_pts * 100 if max_pts > 0 else 0
                 with cols_cat[i_c]:
                     st.markdown(
-                        f'<div style="background:#1e2130;padding:10px;border-radius:8px;text-align:center">'
-                        f'<div style="color:#aaa;font-size:11px">{cat}</div>'
+                        f'<div style="background:#1e2130;padding:5px 6px;border-radius:6px;text-align:center">'
+                        f'<div style="color:#aaa;font-size:10px">{cat}</div>'
                         f'<div style="color:{col_color};font-size:22px;font-weight:700">{pts}/{max_pts}</div>'
                         f'<div style="color:#aaa;font-size:11px">{pct:.0f}%</div>'
                         f'</div>', unsafe_allow_html=True
