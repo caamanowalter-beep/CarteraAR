@@ -47,9 +47,13 @@ st.markdown("""
         font-size: 11px !important; margin-bottom: 1px !important;
     }
     .block-container {
-        padding-top: 0.8rem !important; padding-bottom: 0.8rem !important;
+        padding-top: 0.3rem !important; padding-bottom: 0.5rem !important;
         max-width: 1200px !important;
     }
+    /* Eliminar espacio del header de Streamlit */
+    header[data-testid="stHeader"] { height: 0 !important; min-height: 0 !important; }
+    #MainMenu { display: none !important; }
+    footer { display: none !important; }
     h1 { font-size: 19px !important; margin-bottom: 6px !important; }
     h2 { font-size: 16px !important; margin-bottom: 5px !important; }
     h3 { font-size: 14px !important; margin-bottom: 4px !important; }
