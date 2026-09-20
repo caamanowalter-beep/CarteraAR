@@ -17,6 +17,25 @@ from datetime import datetime, date
 # DETECCIÓN DE ENTORNO Y CONEXIÓN
 # ═══════════════════════════════════════════════════════════════════════════════
 
+FMP_API_KEY = "HpBDT61rNxdt77DDiXkMOurnKjm6kVUp"
+
+def _obtener_precios_fmp(tickers: list) -> dict:
+    """Obtiene precios actuales desde FMP para múltiples tickers."""
+    if not tickers:
+        return {}
+    try:
+        import requests as _req
+        tickers_str = ",".join(tickers)
+        url = f"https://financialmodelingprep.com/api/v3/quote/{tickers_str}?apikey={FMP_API_KEY}"
+        r = _req.get(url, timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            if isinstance(data, list):
+                return {item["symbol"]: float(item["price"]) for item in data if item.get("price")}
+    except Exception:
+        pass
+    return {}
+
 def _get_database_url() -> str | None:
     url = os.environ.get("DATABASE_URL")
     if url:
@@ -483,24 +502,6 @@ def eliminar_movimiento(mov_id: int) -> None:
 # P&L EN TIEMPO REAL
 # ═══════════════════════════════════════════════════════════════════════════════
 
-FMP_API_KEY = "HpBDT61rNxdt77DDiXkMOurnKjm6kVUp"
-
-def _obtener_precios_fmp(tickers: list) -> dict:
-    """Obtiene precios actuales desde FMP para múltiples tickers en una sola llamada."""
-    if not tickers:
-        return {}
-    try:
-        import requests as _req
-        tickers_str = ",".join(tickers)
-        url = f"https://financialmodelingprep.com/api/v3/quote/{tickers_str}?apikey={FMP_API_KEY}"
-        r = _req.get(url, timeout=10)
-        if r.status_code == 200:
-            data = r.json()
-            return {item["symbol"]: float(item["price"]) for item in data if item.get("price")}
-    except Exception:
-        pass
-    return {}
-
 def calcular_pnl(cartera_id: int, ccl: float = 1200.0) -> pd.DataFrame:
     """
     Calcula P&L en tiempo real.
@@ -515,61 +516,32 @@ def calcular_pnl(cartera_id: int, ccl: float = 1200.0) -> pd.DataFrame:
     precios_ars = {}  # ticker -> precio en ARS (CEDEARs y locales via .BA)
     precios_usd = {}  # ticker -> precio en USD (internacionales)
 
-    # Separar tickers por tipo para obtener precios eficientemente
-    tickers_cedear = []  # CEDEARs y locales ARS
-    tickers_usd    = []  # Internacionales USD
-
     for _, pos in df_pos.iterrows():
-        t      = str(pos["ticker"]).upper()
-        es_ced = int(pos.get("es_cedear", 0)) == 1
-        mon    = str(pos.get("moneda", "USD")).upper()
-        if es_ced or mon == "ARS":
-            tickers_cedear.append(t)
-        else:
-            tickers_usd.append(t)
-
-    # Precios USD via FMP (batch) para internacionales
-    if tickers_usd:
+        t         = str(pos["ticker"]).upper()
+        es_cedear = int(pos.get("es_cedear", 0)) == 1
+        moneda    = str(pos.get("moneda", "USD")).upper()
         try:
-            fmp_usd = _obtener_precios_fmp(tickers_usd)
-            precios_usd.update(fmp_usd)
+            if es_cedear or moneda == "ARS":
+                # Buscar precio ARS en BYMA via ticker.BA
+                ticker_ba = t + ".BA" if not t.endswith(".BA") else t
+                info_ba   = yf.Ticker(ticker_ba).info
+                p_ars     = info_ba.get("currentPrice") or info_ba.get("regularMarketPrice")
+                if p_ars:
+                    p_ars_float = float(p_ars)
+                    # Corregir escala si viene multiplicado por 1000
+                    if p_ars_float > 500_000:
+                        p_corregido = p_ars_float / 1000
+                        precios_ars[t] = p_corregido if 10 <= p_corregido <= 500_000 else p_ars_float / 1_000_000
+                    elif p_ars_float >= 10:
+                        precios_ars[t] = p_ars_float
+            else:
+                # Buscar precio USD en Yahoo Finance
+                info  = yf.Ticker(t).info
+                p_usd = info.get("currentPrice") or info.get("regularMarketPrice")
+                if p_usd:
+                    precios_usd[t] = float(p_usd)
         except Exception:
             pass
-        # Fallback Yahoo para los que FMP no devolvió
-        for t_u in tickers_usd:
-            if t_u not in precios_usd:
-                try:
-                    info = yf.Ticker(t_u).info
-                    p = info.get("currentPrice") or info.get("regularMarketPrice")
-                    if p:
-                        precios_usd[t_u] = float(p)
-                except Exception:
-                    pass
-
-    # Precios ARS para CEDEARs: FMP precio USD × CCL, con fallback .BA
-    if tickers_cedear:
-        try:
-            fmp_ced = _obtener_precios_fmp(tickers_cedear)
-        except Exception:
-            fmp_ced = {}
-        for t_c in tickers_cedear:
-            if t_c in fmp_ced and fmp_ced[t_c] > 0:
-                # Precio USD de FMP × CCL = precio ARS equivalente
-                precios_ars[t_c] = fmp_ced[t_c] * ccl
-            else:
-                # Fallback: Yahoo Finance .BA
-                try:
-                    ticker_ba = t_c + ".BA" if not t_c.endswith(".BA") else t_c
-                    info_ba = yf.Ticker(ticker_ba).info
-                    p_ars = info_ba.get("currentPrice") or info_ba.get("regularMarketPrice")
-                    if p_ars:
-                        p_f = float(p_ars)
-                        if p_f > 500_000:
-                            p_f = p_f / 1000
-                        if p_f >= 10:
-                            precios_ars[t_c] = p_f
-                except Exception:
-                    pass
 
     rows = []
     for _, pos in df_pos.iterrows():
