@@ -322,14 +322,15 @@ def _tab_resumen(cartera_id: int, nombre: str, ccl: float):
         df_pnl[cols_ok].style
             .map(_color_ganancia, subset=["Ganancia (USD)", "Ganancia (%)"])
             .format({
-                "Precio promedio":     "${:,.2f}",
+                "Cantidad":            lambda v: f"{v:,.0f}" if v else "—",
+                "Precio promedio":     lambda v: f"${v:,.2f}" if v else "—",
                 "Precio actual (USD)": lambda v: f"${v:,.2f}" if v else "—",
-                "Costo total (USD)":   "${:,.2f}",
-                "Valor actual (USD)":  lambda v: f"${v:,.2f}" if v else "—",
-                "Ganancia (USD)":      lambda v: f"${v:+,.2f}" if v else "—",
-                "Ganancia (%)":        lambda v: f"{v:+.2f}%" if v else "—",
+                "Costo total (USD)":   lambda v: f"${v:,.0f}" if v else "—",
+                "Valor actual (USD)":  lambda v: f"${v:,.0f}" if v else "—",
+                "Ganancia (USD)":      lambda v: f"${v:+,.0f}" if v else "—",
+                "Ganancia (%)":        lambda v: f"{v:+.1f}%" if v else "—",
                 "Ganancia (ARS)":      lambda v: f"${v:+,.0f}" if v else "—",
-            }),
+            }, na_rep="—"),
         use_container_width=True, hide_index=True
     )
 
