@@ -296,6 +296,19 @@ def render():
                 if mdd     is not None: st.metric("Max Drawdown",     f"{mdd:.1f}%")
 
     # ── Tabs de contenido ─────────────────────────────────────────────────────
+    # ── Selector Score Buffett FUERA de los tabs ─────────────────────────────
+    if tickers_ok:
+        if "buffett_ticker_sel" not in st.session_state or            st.session_state.get("buffett_ticker_sel") not in tickers_ok:
+            st.session_state["buffett_ticker_sel"] = tickers_ok[0]
+        col_buff_sel, _ = st.columns([2, 3])
+        with col_buff_sel:
+            st.selectbox(
+                "Ticker para Score Buffett",
+                tickers_ok,
+                index=tickers_ok.index(st.session_state["buffett_ticker_sel"]),
+                key="buffett_ticker_sel"
+            )
+
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "Frontera Eficiente", "Pesos", "Correlaciones",
         "Estadísticas", "Score Buffett"
@@ -339,15 +352,9 @@ def render():
         st.markdown("### Score Buffett — Análisis por ticker")
         st.info("Seleccioná un ticker para ver el análisis detallado según los criterios de Warren Buffett.")
         if tickers_ok:
-            # Usar session_state para evitar rerun al cambiar ticker
-            if "buffett_ticker_sel" not in st.session_state:
-                st.session_state["buffett_ticker_sel"] = tickers_ok[0]
-            ticker_buff = st.selectbox(
-                "Ticker a analizar", tickers_ok,
-                index=tickers_ok.index(st.session_state["buffett_ticker_sel"])
-                      if st.session_state["buffett_ticker_sel"] in tickers_ok else 0,
-                key="buffett_ticker_sel"
-            )
+            # Usar el ticker seleccionado FUERA del tab (persiste entre tabs)
+            ticker_buff = st.session_state.get("buffett_ticker_sel", tickers_ok[0])
+            st.caption(f"Analizando: **{ticker_buff}** — cambiá el ticker arriba")
             with st.spinner(f"Analizando {ticker_buff}..."):
                 info_buff = core.obtener_fundamentales(ticker_buff)
                 resultado = core.score_buffett(info_buff)
