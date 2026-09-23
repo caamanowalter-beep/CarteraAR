@@ -242,6 +242,8 @@ def render():
 
     tickers_ok = df_close.columns.tolist()
     st.success(f"✅ {len(tickers_ok)} tickers con datos: {', '.join(tickers_ok)}")
+    # Guardar tickers_ok en session_state para que persista entre reruns
+    st.session_state["_analisis_tickers_ok"] = tickers_ok
 
     # ── Filtro fundamental (opcional) ─────────────────────────────────────────
     reporte_elim = pd.DataFrame()
@@ -263,24 +265,18 @@ def render():
         mk = core.calcular_markowitz(df_close)
 
     # ── Score Buffett batch ───────────────────────────────────────────────────
-    cache_key = f"buffett_scores_{'_'.join(sorted(tickers_ok))}"
+    cache_key = f"buffett_{'_'.join(sorted(tickers_ok))}"
     if cache_key not in st.session_state:
         with st.spinner(f"Calculando Score Buffett para {len(tickers_ok)} tickers..."):
-            scores_batch = {}
-            prog_b = st.progress(0)
+            sb = {}
+            pg = st.progress(0)
             for i_b, t_b in enumerate(tickers_ok):
-                try:
-                    scores_batch[t_b] = core.score_buffett(core.obtener_fundamentales(t_b))
-                except Exception:
-                    scores_batch[t_b] = {"score":0,"clasificacion":"Sin datos","color":"#888",
-                                          "detalles":[],"rentabilidad":0,"crecimiento":0,
-                                          "solidez":0,"valuacion":0,"moat":0}
-                prog_b.progress((i_b+1)/len(tickers_ok))
-            prog_b.empty()
-            st.session_state[cache_key] = scores_batch
-    else:
-        scores_batch = st.session_state[cache_key]
-    st.session_state["_buffett_cache_key"] = cache_key
+                try: sb[t_b] = core.score_buffett(core.obtener_fundamentales(t_b))
+                except: sb[t_b] = {"score":0,"clasificacion":"Sin datos","color":"#888","detalles":[],"rentabilidad":0,"crecimiento":0,"solidez":0,"valuacion":0,"moat":0}
+                pg.progress((i_b+1)/len(tickers_ok))
+            pg.empty()
+            st.session_state[cache_key] = sb
+    st.session_state["_buffett_ck"] = cache_key
 
     # ── Métricas resumen ──────────────────────────────────────────────────────
     st.markdown("---")
@@ -357,15 +353,25 @@ def render():
 
     
     with tab5:
-        st.markdown("### Score Buffett — Analisis por ticker")
-        if tickers_ok and "_buffett_cache_key" in st.session_state:
-            sb = st.session_state.get(st.session_state["_buffett_cache_key"], {})
-            ticker_buff = st.selectbox("Ticker a analizar", tickers_ok, key="buff_sel")
+        # Usar @st.fragment para que el selectbox no cause rerun completo
+        @st.fragment
+        def _score_buffett_fragment():
+            # Recuperar cache del session_state (persiste entre reruns)
+            ck = st.session_state.get("_buffett_ck")
+            tickers_cached = st.session_state.get("_analisis_tickers_ok", [])
+            sb = st.session_state.get(ck, {}) if ck else {}
+
+            if not tickers_cached or not sb:
+                st.info("Presiona **Analizar** para calcular el Score Buffett de todos los tickers.")
+                return
+
+            ticker_buff = st.selectbox("Ticker a analizar", tickers_cached, key="buff_sel_frag")
             res = sb.get(ticker_buff, {})
             if not res:
                 with st.spinner(f"Calculando {ticker_buff}..."):
                     try: res = core.score_buffett(core.obtener_fundamentales(ticker_buff))
                     except: res = {}
+
             if res:
                 sc=res.get("score",0); col=res.get("color","#888"); cl=res.get("clasificacion","")
                 st.markdown(f'<div style="background:#1e2130;padding:8px 12px;border-radius:8px;border-left:4px solid {col};margin-bottom:8px"><div style="color:#aaa;font-size:10px">Score Buffett</div><div style="color:{col};font-size:28px;font-weight:700">{sc}/100</div><div style="color:white;font-size:12px">{cl}</div></div>', unsafe_allow_html=True)
@@ -388,10 +394,8 @@ def render():
                     st.dataframe(df_rk.style.map(lambda v:"background-color:#1b2d1b;color:#00c896" if isinstance(v,(int,float)) and v>=75 else "background-color:#2d2a1b;color:#f7a34f" if isinstance(v,(int,float)) and v>=55 else "background-color:#2d1b1b;color:#f74f4f" if isinstance(v,(int,float)) and v<35 else "",subset=["Score"]),use_container_width=True,hide_index=True)
             else:
                 st.info(f"Sin datos para {ticker_buff}.")
-        elif tickers_ok:
-            st.info("Presiona **Analizar** para calcular el Score Buffett.")
-        else:
-            st.info("No hay tickers disponibles.")
+
+        _score_buffett_fragment()
 
 
     # ── Exportar Excel ────────────────────────────────────────────────────────
