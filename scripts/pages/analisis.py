@@ -1,3 +1,4 @@
+
 """
 pages/analisis.py — Análisis de portafolio: Markowitz + Fundamentales.
 """
@@ -261,6 +262,26 @@ def render():
     with st.spinner("📐 Calculando portafolios óptimos..."):
         mk = core.calcular_markowitz(df_close)
 
+    # ── Score Buffett batch ───────────────────────────────────────────────────
+    cache_key = f"buffett_scores_{'_'.join(sorted(tickers_ok))}"
+    if cache_key not in st.session_state:
+        with st.spinner(f"Calculando Score Buffett para {len(tickers_ok)} tickers..."):
+            scores_batch = {}
+            prog_b = st.progress(0)
+            for i_b, t_b in enumerate(tickers_ok):
+                try:
+                    scores_batch[t_b] = core.score_buffett(core.obtener_fundamentales(t_b))
+                except Exception:
+                    scores_batch[t_b] = {"score":0,"clasificacion":"Sin datos","color":"#888",
+                                          "detalles":[],"rentabilidad":0,"crecimiento":0,
+                                          "solidez":0,"valuacion":0,"moat":0}
+                prog_b.progress((i_b+1)/len(tickers_ok))
+            prog_b.empty()
+            st.session_state[cache_key] = scores_batch
+    else:
+        scores_batch = st.session_state[cache_key]
+    st.session_state["_buffett_cache_key"] = cache_key
+
     # ── Métricas resumen ──────────────────────────────────────────────────────
     st.markdown("---")
     st.markdown("### 🎯 Portafolios Óptimos")
@@ -296,19 +317,6 @@ def render():
                 if mdd     is not None: st.metric("Max Drawdown",     f"{mdd:.1f}%")
 
     # ── Tabs de contenido ─────────────────────────────────────────────────────
-    # ── Selector Score Buffett FUERA de los tabs ─────────────────────────────
-    if tickers_ok:
-        if "buffett_ticker_sel" not in st.session_state or            st.session_state.get("buffett_ticker_sel") not in tickers_ok:
-            st.session_state["buffett_ticker_sel"] = tickers_ok[0]
-        col_buff_sel, _ = st.columns([2, 3])
-        with col_buff_sel:
-            st.selectbox(
-                "Ticker para Score Buffett",
-                tickers_ok,
-                index=tickers_ok.index(st.session_state["buffett_ticker_sel"]),
-                key="buffett_ticker_sel"
-            )
-
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "Frontera Eficiente", "Pesos", "Correlaciones",
         "Estadísticas", "Score Buffett"
@@ -349,87 +357,42 @@ def render():
 
     
     with tab5:
-        st.markdown("### Score Buffett — Análisis por ticker")
-        st.info("Seleccioná un ticker para ver el análisis detallado según los criterios de Warren Buffett.")
-        if tickers_ok:
-            # Usar el ticker seleccionado FUERA del tab (persiste entre tabs)
-            ticker_buff = st.session_state.get("buffett_ticker_sel", tickers_ok[0])
-            st.caption(f"Analizando: **{ticker_buff}** — cambiá el ticker arriba")
-            with st.spinner(f"Analizando {ticker_buff}..."):
-                info_buff = core.obtener_fundamentales(ticker_buff)
-                resultado = core.score_buffett(info_buff)
-            score_b = resultado["score"]
-            color_b = resultado["color"]
-            clasif  = resultado["clasificacion"]
-            st.markdown(
-                f'<div style="background:#1e2130;padding:8px 12px;border-radius:8px;'
-                f'border-left:5px solid {color_b};margin-bottom:16px">'
-                f'<div style="color:#aaa;font-size:10px">Score Buffett</div>'
-                f'<div style="color:{color_b};font-size:28px;font-weight:700">{score_b}/100</div>'
-                f'<div style="color:white;font-size:16px">{clasif}</div>'
-                f'</div>', unsafe_allow_html=True
-            )
-            cats = [
-                ("Rentabilidad", resultado["rentabilidad"], 30, "#4f8ef7"),
-                ("Crecimiento",  resultado["crecimiento"],  20, "#00c896"),
-                ("Solidez",      resultado["solidez"],      25, "#f7a34f"),
-                ("Valuacion",    resultado["valuacion"],    15, "#9b59b6"),
-                ("Moat",         resultado["moat"],         10, "#1abc9c"),
-            ]
-            st.markdown("#### Desglose por categoria")
-            cols_cat = st.columns(5)
-            for i_c, (cat, pts, max_pts, col_color) in enumerate(cats):
-                pct = pts / max_pts * 100 if max_pts > 0 else 0
-                with cols_cat[i_c]:
-                    st.markdown(
-                        f'<div style="background:#1e2130;padding:5px 6px;border-radius:6px;text-align:center">'
-                        f'<div style="color:#aaa;font-size:10px">{cat}</div>'
-                        f'<div style="color:{col_color};font-size:22px;font-weight:700">{pts}/{max_pts}</div>'
-                        f'<div style="color:#aaa;font-size:11px">{pct:.0f}%</div>'
-                        f'</div>', unsafe_allow_html=True
-                    )
-            st.markdown("#### Detalle de indicadores")
-            df_det = pd.DataFrame(resultado["detalles"],
-                                   columns=["Indicador","Valor","Estado","Puntos","Descripcion"])
-            st.dataframe(
-                df_det.style.map(
-                    lambda v: "color:#00c896" if v=="OK" else "color:#f7a34f" if v=="MED" else "color:#f74f4f" if v=="BAD" else "",
-                    subset=["Estado"]
-                ).format({"Puntos": "{:.0f}"}),
-                use_container_width=True, hide_index=True
-            )
-            if len(tickers_ok) > 1:
-                st.markdown("---")
-                st.markdown("#### Ranking Buffett — Todos los tickers")
-                with st.spinner("Calculando scores..."):
-                    ranking = []
-                    prog2 = st.progress(0)
-                    for i_r, t_r in enumerate(tickers_ok):
-                        inf_r = core.obtener_fundamentales(t_r)
-                        res_r = core.score_buffett(inf_r)
-                        ranking.append({
-                            "Ticker": t_r, "Score": res_r["score"],
-                            "Clasificacion": res_r["clasificacion"],
-                            "Rentabilidad": res_r["rentabilidad"],
-                            "Crecimiento": res_r["crecimiento"],
-                            "Solidez": res_r["solidez"],
-                            "Valuacion": res_r["valuacion"],
-                            "Moat": res_r["moat"],
-                        })
-                        prog2.progress((i_r+1)/len(tickers_ok))
-                    prog2.empty()
-                df_rank = pd.DataFrame(ranking).sort_values("Score", ascending=False)
-                st.dataframe(
-                    df_rank.style.map(
-                        lambda v: "background-color:#1b2d1b;color:#00c896" if isinstance(v,(int,float)) and v>=75 else
-                                  "background-color:#2d2a1b;color:#f7a34f" if isinstance(v,(int,float)) and v>=55 else
-                                  "background-color:#2d1b1b;color:#f74f4f" if isinstance(v,(int,float)) and v<35 else "",
-                        subset=["Score"]
-                    ),
-                    use_container_width=True, hide_index=True
-                )
+        st.markdown("### Score Buffett — Analisis por ticker")
+        if tickers_ok and "_buffett_cache_key" in st.session_state:
+            sb = st.session_state.get(st.session_state["_buffett_cache_key"], {})
+            ticker_buff = st.selectbox("Ticker a analizar", tickers_ok, key="buff_sel")
+            res = sb.get(ticker_buff, {})
+            if not res:
+                with st.spinner(f"Calculando {ticker_buff}..."):
+                    try: res = core.score_buffett(core.obtener_fundamentales(ticker_buff))
+                    except: res = {}
+            if res:
+                sc=res.get("score",0); col=res.get("color","#888"); cl=res.get("clasificacion","")
+                st.markdown(f'<div style="background:#1e2130;padding:8px 12px;border-radius:8px;border-left:4px solid {col};margin-bottom:8px"><div style="color:#aaa;font-size:10px">Score Buffett</div><div style="color:{col};font-size:28px;font-weight:700">{sc}/100</div><div style="color:white;font-size:12px">{cl}</div></div>', unsafe_allow_html=True)
+                cats=[("Rentabilidad",res.get("rentabilidad",0),30,"#4f8ef7"),("Crecimiento",res.get("crecimiento",0),20,"#00c896"),("Solidez",res.get("solidez",0),25,"#f7a34f"),("Valuacion",res.get("valuacion",0),15,"#9b59b6"),("Moat",res.get("moat",0),10,"#1abc9c")]
+                st.markdown("#### Desglose")
+                cols_c=st.columns(5)
+                for i_c,(cat,pts,mx,cc) in enumerate(cats):
+                    pct=pts/mx*100 if mx>0 else 0
+                    with cols_c[i_c]:
+                        st.markdown(f'<div style="background:#1e2130;padding:5px;border-radius:6px;text-align:center"><div style="color:#aaa;font-size:10px">{cat}</div><div style="color:{cc};font-size:16px;font-weight:700">{pts}/{mx}</div><div style="color:#aaa;font-size:10px">{pct:.0f}%</div></div>', unsafe_allow_html=True)
+                st.markdown("#### Indicadores")
+                det=res.get("detalles",[])
+                if det:
+                    st.dataframe(pd.DataFrame(det,columns=["Indicador","Valor","Estado","Puntos","Descripcion"]),use_container_width=True,hide_index=True)
+                if len(sb)>1:
+                    st.markdown("---")
+                    st.markdown("#### Ranking Buffett")
+                    rk=[{"Ticker":t,"Score":v.get("score",0),"Clasificacion":v.get("clasificacion",""),"Rentabilidad":v.get("rentabilidad",0),"Crecimiento":v.get("crecimiento",0),"Solidez":v.get("solidez",0),"Valuacion":v.get("valuacion",0),"Moat":v.get("moat",0)} for t,v in sb.items()]
+                    df_rk=pd.DataFrame(rk).sort_values("Score",ascending=False)
+                    st.dataframe(df_rk.style.map(lambda v:"background-color:#1b2d1b;color:#00c896" if isinstance(v,(int,float)) and v>=75 else "background-color:#2d2a1b;color:#f7a34f" if isinstance(v,(int,float)) and v>=55 else "background-color:#2d1b1b;color:#f74f4f" if isinstance(v,(int,float)) and v<35 else "",subset=["Score"]),use_container_width=True,hide_index=True)
+            else:
+                st.info(f"Sin datos para {ticker_buff}.")
+        elif tickers_ok:
+            st.info("Presiona **Analizar** para calcular el Score Buffett.")
         else:
-            st.info("No hay tickers disponibles para analizar.")
+            st.info("No hay tickers disponibles.")
+
 
     # ── Exportar Excel ────────────────────────────────────────────────────────
     st.markdown("---")
@@ -441,3 +404,4 @@ def render():
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         use_container_width=True
     )
+
